@@ -2,8 +2,13 @@ const std = @import("std");
 const enigma = @import("enigma");
 
 pub fn main() !void {
-    var my_node: enigma.nodes.TestNode = enigma.nodes.TestNode {};
-    
-    const ambi = my_node.node();
-    ambi.test_print();
+    const token = enigma.token.Token { 
+        .token_type = enigma.token.TokenType{
+            .identifier = "Hello"
+        },
+        .line = null,
+        .column = null,
+    };
+
+    _ = token;
 }
