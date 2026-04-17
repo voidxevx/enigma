@@ -1,17 +1,56 @@
+//! # Tokenization Parsing
+//! 4/7/2026 - Nyx
+//! 
+//! Parses a string of text into a package of tokens using a state machine.
+
+// INCLUDES -----
 const std = @import("std");
 const token = @import("token.zig");
 const TokenizationError = @import("../errors.zig").TokenizationError;
+// ----- INCLUDES
 
-// Deterministic finite automata
-
+/// Possible states for the tokenization state machine.
+/// 
+/// # States
+/// * `None` - No state. Default state expecting to change to another state in the next loop.
+/// * `Alphabetic` - Alphabetical characters or identifiers.
+/// * `Numeric` - Numbers and floating points.
+/// * `Symbolic` - Symbols 
+/// * `String` - String characters contained in quotes.
 const TokenizationState = enum {
+    /// No state. Default state expecting to change to another state in the next loop.
     None,
+
+    /// Alphabetical characters or identifiers.
     Alphabetic,
+
+    /// Numbers and floating points.
     Numeric,
+
+    /// Symbols
     Symbolic,
+
+    /// String characters contained in quotes.
     String,
 };
 
+/// Change tokenization state 
+/// 
+/// # States
+/// 
+/// digits -> Numeric
+/// 
+/// alphabetic -> Alphabetic
+/// 
+/// " -> String
+/// 
+/// other -> Symbolic
+/// 
+/// # Arguments
+/// * `gpa` - General purpose allocator.
+/// * `current_char` - The current character in the buffer.
+/// * `state` - A reference to the state object that it will be changing.
+/// * `buffer` - The buffer of tokens
 fn switch_tokenization_state(
     gpa: std.mem.Allocator, 
     current_char: u8, 
@@ -33,6 +72,16 @@ fn switch_tokenization_state(
     }
 }
 
+/// Pushes a token into a package.
+/// 
+/// Matches possible literal or pushes as an identifier.
+/// 
+/// # Arguments
+/// * `gpa` - General purpose allocator
+/// * `package` - The package to push the token to.
+/// * `buffer` - The current buffer containing the token.
+/// * `line` - (optional) The line that is being parsed.
+/// * `column_start` | `column_end` - The start and end columns of the token.
 fn push_token(
     gpa: std.mem.Allocator,
     package: *token.TokenPackage,
@@ -70,6 +119,16 @@ fn push_token(
     });
 }
 
+/// Pushes a numeric token into a package.
+/// 
+/// Uses the numeric state to parse the buffer into its literal value.
+/// 
+/// # Arguments
+/// * `num_state` - The numeric state of the tokenizer.
+/// * `package` - The package that the token will be pushed to.
+/// * `buffer` - The current buffer containing the token.
+/// * `line` - (optional) The line that is being parsed.
+/// * `column_start` | `column_end` - The start and end columns of the token.
 fn push_numeric_token(
     num_state: *NumericState,
     package: *token.TokenPackage,
@@ -85,6 +144,23 @@ fn push_numeric_token(
 
     const literal = match_literal: {
 
+        // =<numerics>===========================
+        // | Size  | fl point | signed | Result |
+        // |-------| ---------| ------ | ------ |
+        // | byte  | none     | false  | i8     |
+        // | byte  | none     | true   | u8     |
+        // | ----- | -------- | ------ | ------ |
+        // | short | none     | false  | i16    |
+        // | short | none     | true   | u16    |
+        // | ----- | -------- | ------ | ------ |
+        // | def   | false    | false  | i32    |
+        // | def   | false    | true   | u32    |
+        // | def   | true     | none   | f32    |
+        // | ----- | -------- | ------ | ------ |
+        // | long  | false    | false  | i64    |
+        // | long  | false    | true   | u64    |
+        // | long  | true     | none   | f64    |
+        // ======================================
         switch (num_state.size) {
             .Byte => if (num_state.unsigned) {
                 const val = try std.fmt.parseInt(u8, buffer.items, 10);
@@ -140,11 +216,28 @@ fn push_numeric_token(
     num_state.* = .{};
 }
 
+/// Result of a state machine call
+/// 
+/// # States
+/// * `Ok` - Everything is fine.
+/// * `OutOfDate` - The state machine is out of date and needs to be switched.
 const StateResult = enum {
     Ok,
+
+    /// The state machine is out of date and needs to be switched.
     OutOfDate,
 };
 
+/// Alphabetical State
+/// 
+/// Creates a token from all alphabetical characters.
+/// 
+/// # Arguments
+/// * `gpa` - General purpose allocator.
+/// * `buffer` - The current buffer containing the token.
+/// * `package` - The package to push the token to.
+/// * `line` - (optional) The line that is being parsed.
+/// * `column_start` | `column_end` - The start and end columns of the token.
 fn alphabetic_state(
     gpa: std.mem.Allocator,
     buffer: *std.ArrayList(u8),
@@ -172,6 +265,16 @@ fn alphabetic_state(
     return StateResult.Ok;
 }
 
+/// Symbolic State 
+/// 
+/// Creates a token from all symbols.
+/// 
+/// # Arguments
+/// * `gpa` - General purpose allocator.
+/// * `buffer` - The current buffer containing the token.
+/// * `package` - The package to push the token to.
+/// * `line` - (optional) The line that is being parsed.
+/// * `column_start` | `column_end` - The start and end columns of the token.
 fn symbolic_state(
     gpa: std.mem.Allocator,
     buffer: *std.ArrayList(u8),
@@ -199,6 +302,18 @@ fn symbolic_state(
     return StateResult.Ok;
 }
 
+/// Numeric State 
+/// 
+/// Creates a numeric literal from a buffer of numbers
+/// 
+/// # Arguments
+/// * `gpa` - General purpose allocator.
+/// * `state` - The numeric state of the parser.
+/// * `buffer` - The current buffer containing the token.
+/// * `current` - The current token being parsed.
+/// * `package` - The package to push the token to.
+/// * `line` - (optional) The line that is being parsed.
+/// * `column_start` | `column_end` - The start and end columns of the token.
 fn numeric_state(
     gpa: std.mem.Allocator,
     state: *NumericState,
@@ -267,20 +382,63 @@ fn numeric_state(
     return StateResult.Ok;
 }
 
+/// Possible sizes of a numeric literal
+/// 
+/// # States
+/// * `Byte` - 8 bit integer.
+/// * `Short` - 16 bit integer.
+/// * `Default` - 32 bit integer.
+/// * `Long` - 64 bit integer
 const NumericSize = enum {
+
+    /// 8 bit integer
     Byte,
+
+    /// 16 bit integer
     Short,
+
+    /// 32 bit integer
     Default,
+
+    /// 64 bit integer
     Long,
 };
 
+
+/// The state of the parsed numeric literal.
+/// 
+/// # Properties
+/// * `size` - The size of the created numeric literal.
+/// * `floating_point` - If the literal should be parsed as a float/double.
+/// * `unsigned` - If the literal is unsigned.
+/// * `locked` - If the number is finished and can now only parse modifier characters.
 const NumericState = struct {
+
+    /// The size of the created numeric literal.
     size: NumericSize = NumericSize.Default,
+
+    /// If the literal should be parsed as a float/double.
     floating_point: bool = false,
+
+    /// If the literal is unsigned.
     unsigned: bool = false,
+
+    /// If the number is finished and can now only parse modifier characters.
     locked: bool = false,
 };
 
+/// String State
+/// 
+/// Parses all characters bound between two quotes. Includes whitespace.
+/// 
+/// # Arguments
+/// * `gpa` - General purpose allocator.
+/// * `state` - The numeric state of the parser.
+/// * `buffer` - The current buffer containing the token.
+/// * `current` - The current token being parsed.
+/// * `package` - The package to push the token to.
+/// * `line` - (optional) The line that is being parsed.
+/// * `column_start` | `column_end` - The start and end columns of the token.
 fn string_state(
     gpa: std.mem.Allocator,
     state: *TokenizationState,
@@ -306,6 +464,32 @@ fn string_state(
     } 
 }
 
+/// Tokenizes a string line.
+/// 
+/// The tokens in the line can be optionally watermarked with the line of origin.
+/// 
+/// # Arguments
+/// * `gpa` - General purpose allocator.
+/// * `string` - The string being parsed.
+/// * `line` - (optional) the line that the tokens will be watermarked with.
+/// 
+/// This uses a Deterministic Finite Automata algorithm. This algorithm treats the parser as a state machine
+/// switching states depending on the set of rules for a token.
+/// 
+/// # Example
+/// 
+/// ```zig
+/// const std = @import("std");
+/// const enigma = @import("enigma");
+/// 
+/// const package = try enigma.tokenization.parsing.tokenize_string(
+///     std.heap.page_allocator,
+///     "Test! 1, 2, 3",
+///     null
+/// );
+/// 
+/// std.debug.print("{f}", .{package});
+/// ```
 pub fn tokenize_string(
     gpa: std.mem.Allocator, 
     string: []const u8, 
@@ -313,7 +497,10 @@ pub fn tokenize_string(
 ) !token.TokenPackage {
     var package = try token.TokenPackage.init(null, gpa);
 
+    // State of the state machine
     var state: TokenizationState = .None;
+
+    // Numeric state
     var num_state: NumericState = .{};
 
     var buffer = try std.ArrayList(u8).initCapacity(gpa, 128);
@@ -323,6 +510,7 @@ pub fn tokenize_string(
     tokenization_loop: while (idx < string.len) {
         const current = string[idx];
 
+        // Break (non-string) tokens when encountering whitespace.
         if (state != .String and std.ascii.isWhitespace(current)) {
             try push_token(gpa, &package, &buffer, line, 0, 0);
             idx += 1;
@@ -330,6 +518,7 @@ pub fn tokenize_string(
         }
 
         switch (state) {
+            // No State - immediately switch to a state.
             .None =>
                 try switch_tokenization_state(gpa, current, &state, &buffer),
 
@@ -352,6 +541,7 @@ pub fn tokenize_string(
         idx += 1;
     }
 
+    // Push any remaining token in the buffer.
     if (state == .Numeric) {
         try push_numeric_token(&num_state, &package, &buffer, line, 0, 0);
     } else {
@@ -359,4 +549,35 @@ pub fn tokenize_string(
     }
 
     return package;
+}
+
+
+pub fn tokenize_file(
+    gpa: std.mem.Allocator, 
+    file_path: []const u8
+) !token.TokenPackage {
+    _ = gpa;
+
+    const file = try std.fs.cwd().openFile(file_path, .{});
+    defer file.close();
+
+    
+}
+
+
+// UNIT TESTS //
+
+test "general_token_parsing_test" {
+    var gpa = std.heap.DebugAllocator(.{}){};
+    defer {
+        const alloc_status = gpa.deinit();
+        if (alloc_status == .leak) {
+            std.debug.print("Memory leak detected!\n", .{});
+        }
+    }
+
+    const allocator = gpa.allocator();
+    const package = try tokenize_string(allocator, "Testing 1, 2, 3", null);
+
+    std.debug.print("{f}", .{package});
 }
