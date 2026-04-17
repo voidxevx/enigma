@@ -232,7 +232,13 @@ pub const TokenPackage = struct {
     /// 
     /// The resulting packages contain full ownership copies of the original data. 
     /// The package alongside the data calling this function will automatically be deallocated at the end of method.
-    pub fn split(self: *Self, point: usize) !struct {Self, Self} {
+    pub fn split(
+        self: *Self, 
+        point: usize
+    ) !struct {
+        Self, 
+        Self
+    } {
         // the package is de-initialized at the end of the method.
         defer self.deinit();
         try self.condense();

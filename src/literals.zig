@@ -25,17 +25,17 @@ pub const ObjectLiteral = union(enum) {
         writer: anytype
     ) !void {
         switch (self) {
-            .byte => |byte| try writer.print("{d}", .{byte}),
-            .ubyte => |ubyte| try writer.print("{d}", .{ubyte}),
-            .short => |short| try writer.print("{d}", .{short}),
-            .ushort => |ushort| try writer.print("{d}", .{ushort}),
-            .int => |int| try writer.print("{d}", .{int}),
-            .uint => |uint| try writer.print("{d}", .{uint}),
-            .long => |long| try writer.print("{d}", .{long}),
-            .ulong => |ulong| try writer.print("{d}", .{ulong}),
-            .size => |size| try writer.print("{d}", .{size}),
-            .float => |float| try writer.print("{d}", .{float}),
-            .double => |double| try writer.print("{d}", .{double}),
+            .byte => |byte| try writer.print("{d}i8", .{byte}),
+            .ubyte => |ubyte| try writer.print("{d}u8", .{ubyte}),
+            .short => |short| try writer.print("{d}i16", .{short}),
+            .ushort => |ushort| try writer.print("{d}u16", .{ushort}),
+            .int => |int| try writer.print("{d}i32", .{int}),
+            .uint => |uint| try writer.print("{d}u32", .{uint}),
+            .long => |long| try writer.print("{d}i64", .{long}),
+            .ulong => |ulong| try writer.print("{d}u64", .{ulong}),
+            .size => |size| try writer.print("{d}usize", .{size}),
+            .float => |float| try writer.print("{d}f32", .{float}),
+            .double => |double| try writer.print("{d}f64", .{double}),
             .string => |str| try writer.print("{s}", .{str}),
             .bool => |_bool| try writer.print("{}", .{_bool}),
         }
