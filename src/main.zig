@@ -2,13 +2,11 @@ const std = @import("std");
 const enigma = @import("enigma");
 
 pub fn main() !void {
-    const token = enigma.token.Token { 
-        .token_type = enigma.token.TokenType{
-            .identifier = "Hello"
-        },
-        .line = null,
-        .column = null,
-    };
-
-    _ = token;
+    const package = 
+        try enigma.tokenization.parsing.tokenize_string(
+            std.heap.page_allocator, 
+            "Testing 1, 2, 3", 
+            null
+        );
+    std.debug.print("{f}", .{package});
 }

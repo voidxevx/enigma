@@ -1,5 +1,5 @@
 //! # Nodes
-//! 4/16/2026 - Rex Bradbury
+//! 4/16/2026 - Nyx
 
 const std = @import("std");
 

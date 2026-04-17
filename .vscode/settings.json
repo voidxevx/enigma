@@ -1,0 +1,12 @@
+{
+    "cSpell.words": [
+        "memcpy",
+        "memmove",
+        "ubyte"
+    ],
+    "zig.testArgs": [
+        "build",
+        "test",
+        "-Dtest-filter=${filter}"
+    ]
+}
