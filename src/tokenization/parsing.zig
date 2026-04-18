@@ -7,6 +7,7 @@
 const std = @import("std");
 const token = @import("token.zig");
 const TokenizationError = @import("../errors.zig").TokenizationError;
+const super = @import("tokenization.zig");
 // ----- INCLUDES
 
 /// Possible states for the tokenization state machine.
@@ -50,14 +51,20 @@ const TokenizationState = enum {
 /// * `gpa` - General purpose allocator.
 /// * `current_char` - The current character in the buffer.
 /// * `state` - A reference to the state object that it will be changing.
-/// * `buffer` - The buffer of tokens
+/// * `buffer` - The buffer of 
+/// * `idx` - The current index
+/// * `column_start` - A reference to the column start variable. Every time the state changes it tracks where it started.
+/// * `config` - Token configurations.
 fn switch_tokenization_state(
     gpa: std.mem.Allocator, 
     current_char: u8, 
     state: *TokenizationState, 
-    buffer: *std.ArrayList(u8)
+    buffer: *std.ArrayList(u8),
+    idx: usize,
+    column_start: *usize,
+    config: *const super.TokenizationConfig,
 ) !void {
-    if (current_char == '"') {
+    if (current_char == config.string_delimiters) {
         state.* = .String;
     } else if (std.ascii.isAlphabetic(current_char)) {
         state.* = .Alphabetic;
@@ -70,6 +77,8 @@ fn switch_tokenization_state(
     if (state.* != .String) {
         try buffer.append(gpa, current_char);
     }
+
+    column_start.* = idx;
 }
 
 /// Pushes a token into a package.
@@ -82,13 +91,15 @@ fn switch_tokenization_state(
 /// * `buffer` - The current buffer containing the token.
 /// * `line` - (optional) The line that is being parsed.
 /// * `column_start` | `column_end` - The start and end columns of the token.
+/// * `config` - Token configurations.
 fn push_token(
     gpa: std.mem.Allocator,
     package: *token.TokenPackage,
     buffer: *std.ArrayList(u8),
     line: ?usize,
     column_start: usize,
-    column_end: usize
+    column_end: usize,
+    config: *const super.TokenizationConfig,
 ) !void {
     if (buffer.items.len == 0)
         return;
@@ -96,11 +107,11 @@ fn push_token(
     defer buffer.clearRetainingCapacity();
 
     const token_type: token.TokenType = 
-        if (std.mem.eql(u8, buffer.items, "true"))
+        if (std.mem.eql(u8, buffer.items, config.literal_true))
             token.TokenType {
                 .literal = .{ .bool = true }
             }
-        else if (std.mem.eql(u8, buffer.items, "false"))
+        else if (std.mem.eql(u8, buffer.items, config.literal_false))
             token.TokenType {
                 .literal = .{ .bool = false }
             }
@@ -246,6 +257,7 @@ fn alphabetic_state(
     line: ?usize,
     column_start: usize,
     column_end: usize,
+    config: *const super.TokenizationConfig,
 ) !StateResult {
     if (!std.ascii.isAlphabetic(current)) {
         try push_token(
@@ -254,7 +266,8 @@ fn alphabetic_state(
             buffer, 
             line, 
             column_start, 
-            column_end
+            column_end,
+            config,
         );
 
         return StateResult.OutOfDate;
@@ -275,6 +288,7 @@ fn alphabetic_state(
 /// * `package` - The package to push the token to.
 /// * `line` - (optional) The line that is being parsed.
 /// * `column_start` | `column_end` - The start and end columns of the token.
+/// * `config` - Token configurations.
 fn symbolic_state(
     gpa: std.mem.Allocator,
     buffer: *std.ArrayList(u8),
@@ -283,15 +297,17 @@ fn symbolic_state(
     line: ?usize,
     column_start: usize,
     column_end: usize,
+    config: *const super.TokenizationConfig,
 ) !StateResult {
-    if (std.ascii.isAlphanumeric(current) or current == '"') {
+    if (std.ascii.isAlphanumeric(current) or current == config.string_delimiters) {
         try push_token(
             gpa, 
             package, 
             buffer, 
             line, 
             column_start, 
-            column_end
+            column_end,
+            config,
         );
 
         return StateResult.OutOfDate;
@@ -314,6 +330,7 @@ fn symbolic_state(
 /// * `package` - The package to push the token to.
 /// * `line` - (optional) The line that is being parsed.
 /// * `column_start` | `column_end` - The start and end columns of the token.
+/// * `config` - Token configurations.
 fn numeric_state(
     gpa: std.mem.Allocator,
     state: *NumericState,
@@ -323,61 +340,51 @@ fn numeric_state(
     line: ?usize,
     column_start: usize,
     column_end: usize,
+    config: *const super.TokenizationConfig,
 ) !StateResult {
-    switch (current) {
-        'u' => {
-            state.*.unsigned = true;
-            state.*.locked = true;
-        },
+    if (current == config.numeric_unsigned_delimiter) {
+        state.*.unsigned = true;
+        state.*.locked = true;
+    } else if (current == config.numeric_long_delimiter) {
+        state.*.size = NumericSize.Long;
+        state.*.locked = true;
+    } else if (current == config.numeric_shorten_delimiter) {
+        state.*.locked = true;
 
-        'l' => {
-            state.*.size = NumericSize.Long;
-            state.*.locked = true;
-        },
+        switch (state.size) {
+            .Short => {
+                state.*.size = .Byte;
+            },
 
-        's' => {
-            state.*.locked = true;
+            .Default => {
+                state.*.size = .Short;
+            },
 
-            switch (state.size) {
-                .Short => {
-                    state.*.size = .Byte;
-                },
-
-                .Default => {
-                    state.*.size = .Short;
-                },
-
-                else => {}
-            }
-        },
-
-        '.' => {
-            if (!state.floating_point) {
-                try buffer.append(gpa, '.');
-                state.*.floating_point = true;
-            } else {
-                return TokenizationError.MultipleDecimalPointsInFloat;
-            }
-        },
-
-        else => {
-            if (state.locked or !std.ascii.isDigit(current)) {
-                try push_numeric_token(
-                    state, 
-                    package, 
-                    buffer, 
-                    line, 
-                    column_start, 
-                    column_end
-                );
-
-                return StateResult.OutOfDate;
-            } else {
-                try buffer.append(gpa, current);
-            }
+            else => {}
         }
-    }     
-    
+    } else if (current == config.floating_point_symbol) {
+        if (!state.floating_point) {
+            try buffer.append(gpa, '.');
+            state.*.floating_point = true;
+        } else {
+            return TokenizationError.MultipleDecimalPointsInFloat;
+        }
+    } else {
+        if (state.locked or !std.ascii.isDigit(current)) {
+            try push_numeric_token(
+                state, 
+                package, 
+                buffer, 
+                line, 
+                column_start, 
+                column_end
+            );
+
+            return StateResult.OutOfDate;
+        } else {
+            try buffer.append(gpa, current);
+        }
+    }
 
     return StateResult.Ok;
 }
@@ -439,6 +446,7 @@ const NumericState = struct {
 /// * `package` - The package to push the token to.
 /// * `line` - (optional) The line that is being parsed.
 /// * `column_start` | `column_end` - The start and end columns of the token.
+/// * `config` - Token configurations.
 fn string_state(
     gpa: std.mem.Allocator,
     state: *TokenizationState,
@@ -448,8 +456,9 @@ fn string_state(
     line: ?usize,
     column_start: usize,
     column_end: usize,
+    config: *const super.TokenizationConfig,
 ) !void {
-    if (current == '"') {
+    if (current == config.string_delimiters) {
         const copy = try buffer.clone(gpa);
         try package.add_token(.{
             .token_type = .{ .literal = .{ .string = copy.items} },
@@ -464,6 +473,51 @@ fn string_state(
     } 
 }
 
+/// Pushes a token found in the single token array of the config.
+/// 
+/// # Arguments
+/// * `gpa` - General purpose allocator.
+/// * `buffer` - The current buffer containing the token.
+/// * `package` - The package to push the token to.
+/// * `current` - The current token being parsed.
+/// * `line` - (optional) The line that is being parsed.
+/// * `column_start` | `column_end` - The start and end columns of the token.
+/// * `config` - Token configurations.
+fn push_single_token (
+    gpa: std.mem.Allocator,
+    buffer: *std.ArrayList(u8),
+    package: *token.TokenPackage,
+    current: u8,
+    line: ?usize,
+    column_start: usize,
+    column_end: usize,
+    config: *const super.TokenizationConfig,
+) !void {
+    if (buffer.items.len > 0) {
+        try push_token(
+            gpa, 
+            package, 
+            buffer, 
+            line, 
+            column_start, 
+            column_end, 
+            config
+        );
+
+        buffer.clearRetainingCapacity();
+    }
+
+    try buffer.append(gpa, current);
+    try package.add_token(.{
+        .token_type = .{ .identifier = (try buffer.clone(gpa)).items },
+        .line = line,
+        .column_start = column_start,
+        .column_end = column_end,
+    });
+
+    buffer.clearRetainingCapacity();
+}
+
 /// Tokenizes a string line.
 /// 
 /// The tokens in the line can be optionally watermarked with the line of origin.
@@ -472,6 +526,7 @@ fn string_state(
 /// * `gpa` - General purpose allocator.
 /// * `string` - The string being parsed.
 /// * `line` - (optional) the line that the tokens will be watermarked with.
+/// * `config` - Token configurations.
 /// 
 /// This uses a Deterministic Finite Automata algorithm. This algorithm treats the parser as a state machine
 /// switching states depending on the set of rules for a token.
@@ -485,23 +540,24 @@ fn string_state(
 /// const package = try enigma.tokenization.parsing.tokenize_string(
 ///     std.heap.page_allocator,
 ///     "Test! 1, 2, 3",
-///     null
+///     null,
+///     .{}
 /// );
 /// 
 /// std.debug.print("{f}", .{package});
 /// ```
 pub fn tokenize_string(
-    gpa: std.mem.Allocator, 
+    gpa: std.mem.Allocator,
     string: []const u8, 
-    line: ?usize
+    line: ?usize,
+    config: *const super.TokenizationConfig,
 ) !token.TokenPackage {
     var package = try token.TokenPackage.init(null, gpa);
 
-    // State of the state machine
     var state: TokenizationState = .None;
-
-    // Numeric state
     var num_state: NumericState = .{};
+
+    var column_start: usize = 0;
 
     var buffer = try std.ArrayList(u8).initCapacity(gpa, 128);
     defer buffer.deinit(gpa);
@@ -510,32 +566,55 @@ pub fn tokenize_string(
     tokenization_loop: while (idx < string.len) {
         const current = string[idx];
 
+        if (config.check_single_token(current)) {
+            try push_single_token(
+                gpa, 
+                &buffer, 
+                &package, 
+                current, 
+                line, 
+                column_start, 
+                idx, 
+                config
+            );
+
+            idx += 1;
+            state = .None;
+            continue :tokenization_loop;
+        }
+
+        // end parsing when encountering a comment
+        if (std.mem.eql(u8, buffer.items, config.comment_pattern)) {
+            buffer.clearRetainingCapacity();
+            break :tokenization_loop;
+        }
+
         // Break (non-string) tokens when encountering whitespace.
         if (state != .String and std.ascii.isWhitespace(current)) {
-            try push_token(gpa, &package, &buffer, line, 0, 0);
+            try push_token(gpa, &package, &buffer, line, 0, idx, config);
             idx += 1;
-            continue: tokenization_loop;
+            continue :tokenization_loop;
         }
 
         switch (state) {
             // No State - immediately switch to a state.
             .None =>
-                try switch_tokenization_state(gpa, current, &state, &buffer),
+                try switch_tokenization_state(gpa, current, &state, &buffer, idx, &column_start, config),
 
             .Alphabetic =>
-                if (try alphabetic_state(gpa, &buffer, current, &package, line, 0, 0) == .OutOfDate)
-                    try switch_tokenization_state(gpa, current, &state, &buffer),
+                if (try alphabetic_state(gpa, &buffer, current, &package, line, column_start, idx, config) == .OutOfDate)
+                    try switch_tokenization_state(gpa, current, &state, &buffer, idx, &column_start, config),
                 
             .Symbolic =>
-                if (try symbolic_state(gpa, &buffer, current, &package, line, 0, 0) == .OutOfDate)
-                    try switch_tokenization_state(gpa, current, &state, &buffer),
+                if (try symbolic_state(gpa, &buffer, current, &package, line, column_start, idx, config) == .OutOfDate)
+                    try switch_tokenization_state(gpa, current, &state, &buffer, idx, &column_start, config),
 
             .Numeric => 
-                if (try numeric_state(gpa, &num_state, &buffer, current, &package, line, 0, 0) == .OutOfDate)
-                    try switch_tokenization_state(gpa, current, &state, &buffer),
+                if (try numeric_state(gpa, &num_state, &buffer, current, &package, line, column_start, idx, config) == .OutOfDate)
+                    try switch_tokenization_state(gpa, current, &state, &buffer, idx, &column_start, config),
 
             .String =>
-                try string_state(gpa, &state, &buffer, current, &package, line, 0, 0,),
+                try string_state(gpa, &state, &buffer, current, &package, line, column_start, idx, config),
         }        
 
         idx += 1;
@@ -543,25 +622,51 @@ pub fn tokenize_string(
 
     // Push any remaining token in the buffer.
     if (state == .Numeric) {
-        try push_numeric_token(&num_state, &package, &buffer, line, 0, 0);
+        try push_numeric_token(&num_state, &package, &buffer, line, column_start, idx);
     } else {
-        try push_token(gpa, &package, &buffer, line, 0, 0);
+        try push_token(gpa, &package, &buffer, line, column_start, idx, config);
     }
 
     return package;
 }
 
 
+/// Tokenizes an entire file.
+/// 
+/// Each line is tokenized individually using tokenize_string
+///
+/// # Example
+/// ```zig
+/// const std = @import("std");
+/// const enigma = @import("enigma");
+/// 
+/// const gpa = std.heap.page_allocator;
+/// 
+/// const package = try enigma.tokenization.parsing.tokenize_file(gpa, "path/to/my/file.eng", .{});
+/// std.debug.print("{f}", package);
+/// ``` 
 pub fn tokenize_file(
     gpa: std.mem.Allocator, 
-    file_path: []const u8
+    file_path: []const u8,
+    config: *const super.TokenizationConfig,
 ) !token.TokenPackage {
-    _ = gpa;
+    var file_package = try token.TokenPackage.init(file_path, gpa);
 
     const file = try std.fs.cwd().openFile(file_path, .{});
     defer file.close();
 
-    
+    var buffer: [1028]u8 = undefined;
+    var buf_reader = file.reader(&buffer);
+    var reader = &buf_reader.interface;
+
+    var line_num: usize = 0;
+    while (try reader.takeDelimiter('\n')) |line| {
+        const package = try tokenize_string(gpa, line, line_num, config);
+        try file_package.merge(package);
+        line_num += 1;
+    }
+
+    return file_package;
 }
 
 

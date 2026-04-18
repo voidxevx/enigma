@@ -163,7 +163,7 @@ pub const TokenPackage = struct {
 
     /// Creates a new token package.
     pub fn init(
-        origin: ?[]const u8, 
+        origin: ?[]const u8,
         allocator: std.mem.Allocator
     ) !Self {
         const capacity = 2;
@@ -202,18 +202,24 @@ pub const TokenPackage = struct {
     /// The memory of the merged package is copied into the calling package and 
     /// then deinit is called on the package.
     /// 
-    /// The resulting capacity of the buffer is the sum of both packages.
+    /// The resulting capacity/size of the buffer is the sum of both packages.
     pub fn merge(
         self: *Self, 
         other: Self
     ) !void {
-        const new_capacity = self.token_capacity + other.token_capacity;
-        self.tokens = try self.allocator.realloc(self.tokens, new_capacity);
+        const new_size = self.token_count + other.token_count;
+        var result_buffer = try self.allocator.alloc(Token, new_size);
 
-        @memcpy(self.tokens[self.token_count..(other.token_count + self.token_count)], other.tokens);
-        self.token_count += other.token_count;
-        self.token_capacity = new_capacity;
+        @memmove(result_buffer[0..self.token_count], self.tokens[0..self.token_count]);
+        @memmove(result_buffer[self.token_count..], other.tokens[0..other.token_count]);
+
+        self.allocator.free(self.tokens);
         other.deinit();
+
+        self.*.token_count = new_size;
+        self.*.token_capacity = new_size;
+
+        self.*.tokens = result_buffer;
     }
 
     /// Condenses the buffer removing any buffer space.
@@ -250,8 +256,8 @@ pub const TokenPackage = struct {
         const right_buffer = try self.allocator.alloc(Token, right_size);
 
         // Copy the data from the original package into the buffers.
-        @memcpy(left_buffer, self.tokens[0..point]);
-        @memcpy(right_buffer, self.tokens[point + 1..self.token_count]);
+        @memmove(left_buffer, self.tokens[0..point]);
+        @memmove(right_buffer, self.tokens[(point + 1)..self.token_count]);
 
         return .{
             Self {
@@ -285,22 +291,17 @@ pub const TokenPackage = struct {
         }
 
         var current_line: ?usize = null;
-        var first_column: usize = 0;
-        var last_column: usize = 0;
 
         for (0..self.token_count) |idx| {
             const current_token = &self.tokens[idx];
-            last_column = current_token.column_end orelse 0;
             if (current_line == null) {
-                try writer.print("\t[{d}]", .{current_token.line orelse 0});
+                try writer.print("\t[{d}]", .{(current_token.line orelse 0) + 1});
                 current_line = current_token.line orelse 0;
-                first_column = current_token.column_start orelse 0;
             }
 
             if (current_line.? != current_token.line orelse 0) {
-                try writer.print("\t{d}:{d}\n\t[{d}]", .{first_column, last_column, current_token.line orelse 0});
+                try writer.print("\n\t[{d}]", .{(current_token.line orelse 0) + 1});
                 current_line = current_token.line orelse 0;
-                first_column = current_token.column_start orelse 0;
             }
 
             if (highlighted_token != null and idx == highlighted_token.?) {
@@ -310,7 +311,7 @@ pub const TokenPackage = struct {
             }
         }
         
-        try writer.print("\t{d}:{d}\n", .{first_column, last_column});
+        try writer.print("\n", .{});
     }
 
     /// Implementation of the format method.

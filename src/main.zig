@@ -9,12 +9,15 @@ pub fn main() !void {
     const gpa = std.heap.page_allocator;
 
     const package = 
-        try enigma.tokenization.parsing.tokenize_string(
+        try enigma
+        .tokenization
+        .parsing
+        .tokenize_file(
             gpa, 
-            "Test|ng 1ul, 2.0, 3 -- \"Yippie yay\"",
-            null
+            "tests/main.eng",
+            &.{}
         );
-
-    try package.format(stdout);
+    
+    try stdout.print("{f}", .{package});
     try stdout.flush();
 }
