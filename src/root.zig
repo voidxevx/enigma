@@ -16,7 +16,8 @@
 // ===================================================================================================================
 
 // MODULES -----
-pub const tokenization = @import("tokenization/tokenization.zig");
+pub const lexing = @import("lexing/tokenization.zig");
+pub const ast = @import("ast/ast.zig");
 pub const literals = @import("literals.zig");
-pub const lexing = @import("lexing/lexing.zig");
+pub const operator = @import("operator.zig");
 // ----- MODULES

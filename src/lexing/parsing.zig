@@ -7,6 +7,8 @@
 // * [4/17/2026] - The state machine functions (numeric_state, symbolic_state, ...) all use 
 //      6-8 arguments. This is quite messy and there needs the be some way of abstracting this
 //      to use less arguments. The goal would to be to get to about 3-4 args.
+//          - I might change the TokenizationState enum to a tagged union that contains only
+//            the data that it needs
 // ===========================================================================================
 
 
@@ -120,6 +122,10 @@ fn push_token(
         else if (std.mem.eql(u8, buffer.items, config.literal_false))
             token.TokenType {
                 .literal = .{ .bool = false }
+            }
+        else if (config.check_operator(buffer.items)) |op|
+            token.TokenType {
+                .operator = op,
             }
         else buffer_copy: {
             const copy = try buffer.clone(gpa);
@@ -543,7 +549,7 @@ fn push_single_token (
 /// const std = @import("std");
 /// const enigma = @import("enigma");
 /// 
-/// const package = try enigma.tokenization.parsing.tokenize_string(
+/// const package = try enigma.lexing.parsing.tokenize_string(
 ///     std.heap.page_allocator,
 ///     "Test! 1, 2, 3",
 ///     null,
@@ -648,7 +654,7 @@ pub fn tokenize_string(
 /// 
 /// const gpa = std.heap.page_allocator;
 /// 
-/// const package = try enigma.tokenization.parsing.tokenize_file(gpa, "path/to/my/file.eng", .{});
+/// const package = try enigma.lexing.parsing.tokenize_file(gpa, "path/to/my/file.eng", .{});
 /// std.debug.print("{f}", package);
 /// ``` 
 pub fn tokenize_file(

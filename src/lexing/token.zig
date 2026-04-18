@@ -9,6 +9,7 @@
 // INCUDES ----- 
 const std = @import("std");
 const ObjectLiteral = @import("../literals.zig").ObjectLiteral;
+const Operator = @import("../operator.zig").Operator;
 // ----- INCLUDES
 
 /// The type of the token.
@@ -16,6 +17,7 @@ const ObjectLiteral = @import("../literals.zig").ObjectLiteral;
 /// # Variants
 /// * `Identifier` - A string value representing any token that wasn't an object literal.
 /// * `Literal` - A token that stores an object literal e.i int, float, string, etc.
+/// * `Operator` - An operator token that was predefined by the token config. 
 /// 
 /// Implements format method.
 /// 
@@ -34,7 +36,7 @@ const ObjectLiteral = @import("../literals.zig").ObjectLiteral;
 /// Literal Token
 /// 
 /// ```zig
-/// const token = @import("enigma").token;
+/// const token = @import("enigma").lexing.token;
 /// const literals = @import("enigma").literals;
 /// 
 /// const token_type = token.TokenType {
@@ -50,6 +52,9 @@ pub const TokenType = union(enum) {
     /// A token that stores an object literal e.i int, float, string, etc.
     literal: ObjectLiteral,
 
+    /// An operator token that was predefined by the token config.
+    operator: *const Operator,
+
     /// Format Implementation.
     pub fn format(
         self: TokenType,
@@ -62,6 +67,10 @@ pub const TokenType = union(enum) {
 
             .literal => |lit| {
                 try writer.print("{f}", .{lit});
+            },
+
+            .operator => |op| {
+                try writer.print("\x1b[4m{s}\x1b[24m", .{op.symbol});
             }
         }
     }
@@ -80,7 +89,7 @@ pub const TokenType = union(enum) {
 /// # Example
 /// 
 /// ```zig
-/// const token = @import("enigma").token;
+/// const token = @import("enigma").lexing.token;
 /// 
 /// const token = token.Token {
 ///     .token_type = .{
@@ -134,10 +143,10 @@ pub const Token = struct {
 /// const std = @import("std");
 /// const enigma = @import("enigma");
 /// 
-/// var package = try enigma.token.TokenPackage.init(null, std.heap.page_allocator);
+/// var package = try enigma.lexing.token.TokenPackage.init(null, std.heap.page_allocator);
 /// defer package.deinit();
 /// 
-/// package.add_token(enigma.token.Token {
+/// package.add_token(enigma.lexing.token.Token {
 ///     .token_type = .{ .identifier = "Test" }
 /// })
 /// ```
@@ -181,6 +190,28 @@ pub const TokenPackage = struct {
     /// Deletes the buffer of tokens
     pub fn deinit(self: Self) void {
         self.allocator.free(self.tokens);
+    }
+
+    pub const PackageIterator = struct {
+        idx: usize = 0,
+        tokens: *const []Token,
+        size: usize,
+
+        pub fn next(self: *PackageIterator) ?*const Token {
+            if (self.idx >= self.size)
+                return null;
+            const token = &self.tokens.*[self.idx];
+            self.*.idx += 1;
+            return token;
+        }
+    };
+
+    /// Creates an iterator for iterating over each token
+    pub fn iter(self: *const Self) PackageIterator {
+        return PackageIterator {
+            .tokens = &self.tokens,
+            .size = self.token_count,
+        };
     }
 
     /// Adds a new token to the end of the array.
@@ -230,6 +261,26 @@ pub const TokenPackage = struct {
             self.tokens = try self.allocator.realloc(self.tokens, self.token_count);
             self.token_capacity = self.token_count;
         }
+    }
+
+
+    /// Pops the first token from the package
+    pub fn pop_prefix(self: *Self) !void {
+        self.*.token_capacity -= 1;
+        self.*.token_count -= 1;
+        const buffer = try self.allocator.alloc(Token, self.token_capacity);
+        @memmove(buffer, self.tokens[1..]);
+        self.allocator.free(self.tokens);
+        self.*.tokens = buffer;
+    }
+
+    pub fn pop_suffix(self: *Self) !void {
+        self.*.token_capacity -= 1;
+        self.*.token_count -= 1;
+        const buffer = try self.allocator.alloc(Token, self.token_capacity);
+        @memmove(buffer, self.tokens[0..self.token_count]);
+        self.allocator.free(self.tokens);
+        self.*.tokens = buffer;
     }
 
 

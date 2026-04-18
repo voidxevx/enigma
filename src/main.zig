@@ -8,23 +8,29 @@ pub fn main() !void {
 
     const gpa = std.heap.page_allocator;
 
-    const package = 
+    var operators: std.ArrayList(enigma.operator.Operator) = .empty;
+    defer operators.deinit(gpa);
+    try operators.append(gpa, .{
+        .symbol = "+",
+        .infix_binding_power = 4,
+        .prefix_binding_power = 2,
+    });
+
+    var package = 
         try enigma
-        .tokenization
+        .lexing
         .parsing
         .tokenize_file(
             gpa, 
             "tests/main.eng",
-            &.{}
+            &.{.operators = operators}
         );
     
     try stdout.print("{f}", .{package});
     try stdout.flush();
 
-    var node = enigma.lexing.node.NullNode {};
+    const head = try enigma.ast.parser.parse_tokens(&package);
 
-    const inode = node.interface();
-    try stdout.print("{f}", .{inode});
+    try stdout.print("{f}", .{head});
     try stdout.flush();
-
 }

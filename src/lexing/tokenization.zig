@@ -1,4 +1,4 @@
-//! # Tokenization
+//! # Lexing
 //! 4/17/2026 - Nyx
 //! 
 //! Tokenization splits a string of text into its primitive tokens.
@@ -8,8 +8,10 @@
 //! constant type such as an integer, string, float, etc. Identifiers are just about anything else. 
 //! Identifiers are split by symbolic and alphabetic characters.
 
-// INCLUDES
+// INCLUDES -----
 const std = @import("std");
+const Operator = @import("../operator.zig").Operator;
+// ----- INCLUDES
 
 // MODULES -----
 pub const token = @import("token.zig");
@@ -52,6 +54,8 @@ pub const TokenizationConfig = struct {
     /// Character that marks a numeric literal as unsigned.
     numeric_unsigned_delimiter: u8 = 'u',
 
+    operators: std.ArrayList(Operator),
+
     /// Checks if a character is contained in the `single_tokens` list.
     pub fn check_single_token(self: *const TokenizationConfig, symbol: u8) bool {
         for (0..self.single_tokens.len) |idx| {
@@ -61,5 +65,15 @@ pub const TokenizationConfig = struct {
         }
 
         return false;
+    }
+
+    /// Checks if a string matches a operator symbol
+    pub fn check_operator(self: *const TokenizationConfig, symbol: []const u8) ?*const Operator {
+        for (self.operators.items) |*op| {
+            if (std.mem.eql(u8, op.symbol, symbol))
+                return op;
+        }
+
+        return null;
     }
 };
