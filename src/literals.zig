@@ -1,3 +1,7 @@
+//! # Literals
+//! 4/17/2026 - Nyx
+//! 
+//! Literal values: integers, booleans, strings, etc.
 
 pub const ObjectLiteral = union(enum) {
     byte: i8,
