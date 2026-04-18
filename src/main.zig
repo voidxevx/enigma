@@ -20,4 +20,11 @@ pub fn main() !void {
     
     try stdout.print("{f}", .{package});
     try stdout.flush();
+
+    var node = enigma.lexing.node.NullNode {};
+
+    const inode = node.interface();
+    try stdout.print("{f}", .{inode});
+    try stdout.flush();
+
 }

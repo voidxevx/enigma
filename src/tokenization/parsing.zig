@@ -3,10 +3,16 @@
 //! 
 //! Parses a string of text into a package of tokens using a state machine.
 
+// =<Future>==================================================================================
+// * [4/17/2026] - The state machine functions (numeric_state, symbolic_state, ...) all use 
+//      6-8 arguments. This is quite messy and there needs the be some way of abstracting this
+//      to use less arguments. The goal would to be to get to about 3-4 args.
+// ===========================================================================================
+
+
 // INCLUDES -----
 const std = @import("std");
 const token = @import("token.zig");
-const TokenizationError = @import("../errors.zig").TokenizationError;
 const super = @import("tokenization.zig");
 // ----- INCLUDES
 
@@ -367,7 +373,7 @@ fn numeric_state(
             try buffer.append(gpa, '.');
             state.*.floating_point = true;
         } else {
-            return TokenizationError.MultipleDecimalPointsInFloat;
+            return error.MultipleDecimalPointsInFloat;
         }
     } else {
         if (state.locked or !std.ascii.isDigit(current)) {
