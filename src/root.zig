@@ -16,17 +16,45 @@ pub const Operator = struct {
     }
 };
 
+pub const NEW_Operator = struct {
+    symbol: []const u8,
+    infix_binding_power: i32,
+    resolve: *const fn(*Interpreter) anyerror!void,
+
+    pub fn format(self: *const NEW_Operator, writer: *std.io.Writer) std.Io.Writer.Error!void {
+        try writer.print("\x1b[4m{s}\x1b[0m", .{self.symbol});
+    }
+};
+
+pub const ObjectLiteral = union(enum) {
+    Integer: i64,
+    Float: f64,
+
+    pub fn format(self: *const ObjectLiteral, writer: *std.io.Writer) std.Io.Writer.Error!void {
+        switch (self.*) {
+            .Integer => |i| try writer.print("{d}i", .{i}),
+            .Float => |f| try writer.print("{d}f", .{f}),
+        }
+    }
+};
+
 pub const Token = union(enum) {
     Identifier: u8,
     Int: u8,
+    Literal: ObjectLiteral,
+    IdentifierHash: u64,
     Operator: *const Operator,
+    New_Operator: *const NEW_Operator,
     EOF,
 
     pub fn format(self: *const Token, writer: *std.io.Writer) std.Io.Writer.Error!void {
         switch (self.*) {
             .Identifier => |id| try writer.print("\x1b[4;33m{c}\x1b[0m", .{id}),
+            .IdentifierHash => try writer.print("IDENT", .{}),
             .Int => |i| try writer.print("{d}", .{i}),
+            .Literal => |lit| try lit.format(writer),
             .Operator => |op| try writer.print("{f}", .{op}),
+            .New_Operator => |op| try writer.print("{f}", .{op}),
             .EOF => try writer.print("eof", .{}),
         }
     }
@@ -34,9 +62,228 @@ pub const Token = union(enum) {
     pub fn get_infix_binding_power(self: *const Token) i32 {
         switch (self.*) {
             .Operator => |op| return op.infix_binding_power,
+            .New_Operator => |op| return op.infix_binding_power,
             .EOF => return -1,
             else => return 0,
         }
+    }
+};
+
+pub const NEW_TokenStream = struct {
+    tokens: []Token,
+    token_count: usize,
+
+    pub const Tokenizer = struct {
+        const TOKENIZER_BUFFER_CAPACITY: usize = 128;
+        const DEFAULT_TOKEN_CAPACITY: usize = 16;
+
+        string: []const u8,
+        config: TokenConfig,
+        gpa: std.mem.Allocator,
+        tokens: []Token,
+        buffer: []u8,
+
+        buffer_size: usize = 0,
+        idx: usize = 0,
+        token_count: usize = 0,
+        token_capacity: usize = DEFAULT_TOKEN_CAPACITY,
+        state: TokenizationState = .None,
+        num_state: ?NumericObjectState = null,
+
+        pub const TokenConfig = struct {
+            operators: std.ArrayList(NEW_Operator),
+
+            fn check_operator(self: *const TokenConfig, symbol: []const u8) ?*const NEW_Operator {
+                for (self.operators.items) |*op| {
+                    if (std.mem.eql(u8, symbol, op.symbol))
+                        return op;
+                }
+
+                return null;
+            }
+        };
+
+        const NumericObjectState = struct {
+            floating_point: bool = false,
+        };
+
+        const TokenizationState = enum {
+            None,
+            Symbolic,
+            Alphabetic,
+            Numeric,
+        };
+
+        const StateResult = enum {
+            Ok,
+            OutOfDate,
+        };
+
+        fn check_alphabetic_state(self: *Tokenizer) !StateResult {
+            if (std.ascii.isAlphanumeric(self.peek())) {
+                try self.consume_character();
+                return .Ok;
+            } else {
+                try self.push_buffer();
+                return .OutOfDate;
+            }
+        }
+
+        fn check_symbolic_state(self: *Tokenizer) !StateResult {
+            if (std.ascii.isAlphanumeric(self.peek())) {
+                try self.push_buffer();
+                return .OutOfDate;
+            } else {
+                try self.consume_character();
+                return .Ok;
+            }
+        }
+
+        fn check_numeric_state(self: *Tokenizer) !StateResult {
+            const current = self.peek();
+            if (std.ascii.isDigit(current)) {
+                try self.consume_character();
+            } else if (current == '.' and !self.num_state.?.floating_point) {
+                self.*.num_state.?.floating_point = true;
+                try self.consume_character();
+            } else {
+                try self.push_buffer();
+                return .OutOfDate;
+            }
+
+            return .Ok;
+        }
+
+        inline fn check_state(self: *Tokenizer) !StateResult {
+            switch (self.state) {
+                .Alphabetic =>
+                    return try self.check_alphabetic_state(),
+                .Symbolic =>
+                    return try self.check_symbolic_state(),
+                .Numeric =>
+                    return try self.check_numeric_state(),
+                else => return .OutOfDate
+            }
+        }
+
+        fn switch_state(self: *Tokenizer) void {
+            const current = self.peek();
+            self.*.num_state = null;
+
+            if (std.ascii.isDigit(current)) {
+                self.*.state = .Numeric;
+                self.*.num_state = .{};
+            } else if (std.ascii.isAlphabetic(current)) {
+                self.*.state = .Alphabetic;
+            } else {
+                self.*.state = .Symbolic;
+            }
+        }
+
+        fn consume_character(self: *Tokenizer) !void {
+            self.*.buffer[self.buffer_size] = self.peek();
+            self.*.buffer_size += 1;
+        }
+
+        fn peek(self: *Tokenizer) u8 {
+            return self.string[self.idx];
+        }
+
+        fn next(self: *Tokenizer) void {
+            self.*.idx += 1;
+        }
+
+        fn push_token(self: *Tokenizer, token: Token) !void {
+            if (self.token_count >= self.token_capacity) {
+                self.*.token_capacity *= 2;
+                self.*.tokens = try self.gpa.realloc(self.tokens, self.token_capacity);
+            }
+
+            self.*.tokens[self.token_count] = token;
+            self.*.token_count += 1;
+        }
+
+        fn push_keyword_token(self: *Tokenizer, string: []const u8) !void {
+            if (self.config.check_operator(string)) |op| {
+                try self.push_token(.{ .New_Operator = op });
+            } else {
+                try self.push_token(.{ .IdentifierHash = std.hash.Wyhash.hash(0, string)});
+            }
+        }
+
+        fn push_numeric_token(self: *Tokenizer, string: []const u8) !void {
+            const state = self.num_state.?;
+            if (state.floating_point) {
+                const val: f64 = try std.fmt.parseFloat(f64, string);
+                const token: Token = .{
+                    .Literal = .{ .Float = val }
+                };
+                try self.push_token(token);
+            } else {
+                const val: i64 = try std.fmt.parseInt(i64, string, 10);
+                const token: Token = .{
+                    .Literal = .{ .Integer = val }
+                };
+                try self.push_token(token);
+            }
+        }
+
+        fn push_buffer(self: *Tokenizer) !void {
+            if (self.buffer_size == 0)
+                return;
+
+            defer self.*.buffer_size = 0;
+            switch (self.state) {
+                .Numeric => 
+                    try self.push_numeric_token(self.buffer[0..self.buffer_size]),
+
+                else =>
+                    try self.push_keyword_token(self.buffer[0..self.buffer_size]),
+            }
+        }
+
+        pub fn init(string: []const u8, config: TokenConfig, gpa: std.mem.Allocator) !Tokenizer {
+            return .{
+                .string = string,
+                .config = config,
+                .gpa = gpa,
+                .tokens = try gpa.alloc(Token, DEFAULT_TOKEN_CAPACITY),
+                .buffer = try gpa.alloc(u8, TOKENIZER_BUFFER_CAPACITY),
+            };
+        }
+
+        pub fn finish(self: *Tokenizer) !NEW_TokenStream {
+            defer self.gpa.free(self.buffer);
+            defer self.gpa.free(self.tokens);
+
+            const finalized_buffer = try self.gpa.alloc(Token, self.token_count);
+            @memcpy(finalized_buffer, self.tokens[0..self.token_count]);
+
+            return .{
+                .tokens = finalized_buffer,
+                .token_count = self.token_count,
+            };
+        }
+
+        pub fn tokenize(self: *Tokenizer) !void {
+            while(self.idx < self.string.len) {
+                defer self.next();
+                if (std.ascii.isWhitespace(self.peek())) {
+                    try self.push_buffer();
+                    self.*.state = .None;
+                } else if (try self.check_state() == .OutOfDate) {
+                    self.switch_state();
+                    try self.consume_character();
+                }
+            }
+
+            try self.push_buffer();
+            try self.push_token(.EOF);
+        }
+    };
+
+    pub fn deinit(self: *NEW_TokenStream, gpa: std.mem.Allocator) void {
+        gpa.free(self.tokens);
     }
 };
 

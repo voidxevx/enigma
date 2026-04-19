@@ -26,30 +26,48 @@ fn product(interpreter: *enigma.Interpreter) anyerror!void {
 pub fn main() !void {
     const gpa = std.heap.page_allocator;
 
-    var operators: std.ArrayList(enigma.Operator) = .empty;
+    var operators: std.ArrayList(enigma.NEW_Operator) = .empty;
     try operators.append(gpa, .{
-        .symbol = '+',
-        .infix_binding_power = 3,
+        .symbol = ",",
+        .infix_binding_power = 2,
         .resolve = sum,
     });
 
-    try operators.append(gpa, .{
-        .symbol = '*',
-        .infix_binding_power = 4,
-        .resolve = product,
-    });
+    var tokenizer = try enigma.NEW_TokenStream.Tokenizer.init("testing 1, 2, 3", .{ .operators = operators }, gpa);
+    try tokenizer.tokenize();
+    var tokens = try tokenizer.finish();
+    defer tokens.deinit(gpa);
 
-    const t_stream = try enigma.TokenStream.init(gpa, .{ .operators = operators }, "3 + 9 * 4");
+    std.debug.print("token count: {d}\n", .{tokens.token_count});
+    for (0..tokens.token_count) |i| {
+        const token = tokens.tokens[i];
+        std.debug.print("{d} {f}\n", .{i, token});
+    }
 
-    std.debug.print("{f}\n", .{t_stream});
+    // var operators: std.ArrayList(enigma.Operator) = .empty;
+    // try operators.append(gpa, .{
+    //     .symbol = '+',
+    //     .infix_binding_power = 3,
+    //     .resolve = sum,
+    // });
 
-    var ast = try enigma.SyntaxTree.init(gpa, t_stream);
-    defer ast.deinit(gpa);
-    std.debug.print("{f}\n", .{ast});
+    // try operators.append(gpa, .{
+    //     .symbol = '*',
+    //     .infix_binding_power = 4,
+    //     .resolve = product,
+    // });
 
-    var interpreter: enigma.Interpreter = try .init(gpa);
-    const result = try interpreter.run(&ast);
+    // const t_stream = try enigma.TokenStream.init(gpa, .{ .operators = operators }, "3 + 9 * 4");
 
-    if (result) |res|
-        std.debug.print("Result: {d}", .{res});
+    // std.debug.print("{f}\n", .{t_stream});
+
+    // var ast = try enigma.SyntaxTree.init(gpa, t_stream);
+    // defer ast.deinit(gpa);
+    // std.debug.print("{f}\n", .{ast});
+
+    // var interpreter: enigma.Interpreter = try .init(gpa);
+    // const result = try interpreter.run(&ast);
+
+    // if (result) |res|
+    //     std.debug.print("Result: {d}", .{res});
 }

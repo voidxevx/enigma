@@ -1,8 +1,10 @@
 {
     "cSpell.words": [
+        "LEXICS",
         "memcpy",
         "memmove",
-        "ubyte"
+        "ubyte",
+        "Wyhash"
     ],
     "zig.testArgs": [
         "build",
