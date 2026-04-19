@@ -9,6 +9,7 @@ const std = @import("std");
 pub const Operator = struct {
     symbol: u8,
     infix_binding_power: i32,
+    resolve: *const fn (*Interpreter) anyerror!void,
 
     pub fn format(self: *const Operator, writer: *std.io.Writer) std.Io.Writer.Error!void {
         try writer.print("\x1b[4m{c}\x1b[0m", .{self.symbol});
@@ -115,6 +116,7 @@ pub const SyntaxTree = struct {
         pub const VTable = struct {
             format: ?*const fn (*const anyopaque, *std.io.Writer) std.Io.Writer.Error!void = null,
             deinit: ?*const fn (*anyopaque, std.mem.Allocator) void = null,
+            resolve: *const fn (*anyopaque, *Interpreter) anyerror!void,
         };
 
         pub fn format(self: *const INode, writer: *std.io.Writer) std.Io.Writer.Error!void {
@@ -129,6 +131,10 @@ pub const SyntaxTree = struct {
             if (self.vtable.deinit) |_deinit|
                 _deinit(self.ptr, gpa);
         }
+
+        pub fn resolve(self: *INode, interpreter: *Interpreter) !void {
+            try self.vtable.resolve(self.ptr, interpreter);
+        }
     };
 
     const Node_NUD_Identifier = struct {
@@ -140,6 +146,7 @@ pub const SyntaxTree = struct {
                 .vtable = &.{
                     .format = Node_NUD_Identifier.format,
                     .deinit = Node_NUD_Identifier.deinit,
+                    .resolve = Node_NUD_Identifier.resolve,
                 } 
             };
         }
@@ -153,6 +160,11 @@ pub const SyntaxTree = struct {
             const self: *Node_NUD_Identifier = @ptrCast(@alignCast(ptr));
             gpa.destroy(self);
         }
+
+        fn resolve(ptr: *anyopaque, interpreter: *Interpreter) anyerror!void {
+            const self: *Node_NUD_Identifier = @ptrCast(@alignCast(ptr));
+            try interpreter.push(self.identifier);
+        }
     };
 
     const Node_NUD_Integer = struct {
@@ -164,6 +176,7 @@ pub const SyntaxTree = struct {
                 .vtable = &.{
                     .format = Node_NUD_Integer.format,
                     .deinit = Node_NUD_Integer.deinit,
+                    .resolve = Node_NUD_Integer.resolve,
                 } 
             };
         }
@@ -176,6 +189,11 @@ pub const SyntaxTree = struct {
         fn deinit(ptr: *anyopaque, gpa: std.mem.Allocator) void {
             const self: *Node_NUD_Integer = @ptrCast(@alignCast(ptr));
             gpa.destroy(self);
+        }
+
+        fn resolve(ptr: *anyopaque, interpreter: *Interpreter) anyerror!void {
+            const self: *Node_NUD_Integer = @ptrCast(@alignCast(ptr));
+            try interpreter.push(self.int);
         }
     };
 
@@ -190,8 +208,14 @@ pub const SyntaxTree = struct {
                 .vtable = &.{
                     .format = Node_LED_Operator.format,
                     .deinit = Node_LED_Operator.deinit,
+                    .resolve = Node_LED_Operator.resolve,
                 }
             };
+        }
+
+        pub fn format(ptr: *const anyopaque, writer: *std.io.Writer) std.Io.Writer.Error!void {
+            const self: *const Node_LED_Operator = @ptrCast(@alignCast(ptr));
+            try writer.print("({f} {c} {f})", .{self.left, self.operator.symbol, self.right});
         }
 
         fn deinit(ptr: *anyopaque, gpa: std.mem.Allocator) void {
@@ -201,9 +225,11 @@ pub const SyntaxTree = struct {
             gpa.destroy(self);
         }
 
-        pub fn format(ptr: *const anyopaque, writer: *std.io.Writer) std.Io.Writer.Error!void {
-            const self: *const Node_LED_Operator = @ptrCast(@alignCast(ptr));
-            try writer.print("({f} {c} {f})", .{self.left, self.operator.symbol, self.right});
+        fn resolve(ptr: *anyopaque, interpreter: *Interpreter) anyerror!void {
+            const self: *Node_LED_Operator = @ptrCast(@alignCast(ptr));
+            try self.left.resolve(interpreter);
+            try self.right.resolve(interpreter);
+            try self.operator.resolve(interpreter);
         }
     };
 
@@ -212,12 +238,10 @@ pub const SyntaxTree = struct {
         idx: usize = 0,
         gpa: std.mem.Allocator,
 
-        const ParsingError = error{
+        const Error = error{
             NoNUDForToken,
             NoLEDForToken,
-        };
-
-        const Error = ParsingError || anyerror;
+        } || anyerror;
 
         fn peek(self: *const Parser) *const Token {
             return &self.token_stream.tokens[self.idx];
@@ -296,5 +320,64 @@ pub const SyntaxTree = struct {
 
 
 // INTERPRETING -----
+pub const Interpreter = struct {
+    const DEFAULT_STACK_CAPACITY: usize = 16;
 
+    heap: std.AutoHashMap(u8, u8),
+    stack: []u8,
+    stack_ptr: usize = 0,
+    stack_capacity: usize = DEFAULT_STACK_CAPACITY,
+    gpa: std.mem.Allocator,
+
+    pub fn init(gpa: std.mem.Allocator) !Interpreter {
+        return .{
+            .heap = .init(gpa),
+            .stack = try gpa.alloc(u8, DEFAULT_STACK_CAPACITY),
+            .gpa = gpa,
+        };
+    }
+
+    pub fn deinit(self: *Interpreter) void {
+        self.heap.deinit();
+        self.gpa.free(self.stack);
+    }
+
+    pub fn flush(self: *Interpreter) !void {
+        self.gpa.free(self.stack);
+        self.stack_capacity = DEFAULT_STACK_CAPACITY;
+        self.stack_ptr = 0;
+        self.stack = try self.gpa.alloc(u8, DEFAULT_STACK_CAPACITY);
+    }
+
+    pub fn push(self: *Interpreter, val: u8) !void {
+        if (self.stack_ptr >= self.stack_capacity) {
+            self.*.stack_capacity *= 2;
+            self.*.stack = try self.gpa.realloc(self.stack, self.stack_capacity);
+        }
+
+        self.*.stack[self.stack_ptr] = val;
+        self.*.stack_ptr += 1;
+    }
+
+    pub fn pop(self: *Interpreter) ?u8 {
+        if (self.stack_ptr == 0)
+            return null;
+
+        self.*.stack_ptr -= 1;
+        return self.stack[self.stack_ptr];
+    }
+
+    pub fn emplace_variable(self: *Interpreter, identifier: u8, value: u8) !void {
+        try self.heap.put(identifier, value);
+    }
+
+    pub fn get_variable(self: Interpreter, identifier: u8) ?u8 {
+        return self.heap.get(identifier);
+    }
+
+    pub fn run(self: *Interpreter, ast: *SyntaxTree) !?u8 {
+        try ast.head.resolve(self);
+        return self.pop();
+    }
+};
 // ----- INTERPRETING
