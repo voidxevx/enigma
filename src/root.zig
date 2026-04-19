@@ -7,21 +7,11 @@ const std = @import("std");
 
 // LEXICS -----
 pub const Operator = struct {
-    symbol: u8,
-    infix_binding_power: i32,
-    resolve: *const fn (*Interpreter) anyerror!void,
-
-    pub fn format(self: *const Operator, writer: *std.io.Writer) std.Io.Writer.Error!void {
-        try writer.print("\x1b[4m{c}\x1b[0m", .{self.symbol});
-    }
-};
-
-pub const NEW_Operator = struct {
     symbol: []const u8,
     infix_binding_power: i32,
     resolve: *const fn(*Interpreter) anyerror!void,
 
-    pub fn format(self: *const NEW_Operator, writer: *std.io.Writer) std.Io.Writer.Error!void {
+    pub fn format(self: *const Operator, writer: *std.io.Writer) std.Io.Writer.Error!void {
         try writer.print("\x1b[4m{s}\x1b[0m", .{self.symbol});
     }
 };
@@ -39,22 +29,16 @@ pub const ObjectLiteral = union(enum) {
 };
 
 pub const Token = union(enum) {
-    Identifier: u8,
-    Int: u8,
     Literal: ObjectLiteral,
     IdentifierHash: u64,
     Operator: *const Operator,
-    New_Operator: *const NEW_Operator,
     EOF,
 
     pub fn format(self: *const Token, writer: *std.io.Writer) std.Io.Writer.Error!void {
         switch (self.*) {
-            .Identifier => |id| try writer.print("\x1b[4;33m{c}\x1b[0m", .{id}),
             .IdentifierHash => try writer.print("IDENT", .{}),
-            .Int => |i| try writer.print("{d}", .{i}),
             .Literal => |lit| try lit.format(writer),
             .Operator => |op| try writer.print("{f}", .{op}),
-            .New_Operator => |op| try writer.print("{f}", .{op}),
             .EOF => try writer.print("eof", .{}),
         }
     }
@@ -62,14 +46,13 @@ pub const Token = union(enum) {
     pub fn get_infix_binding_power(self: *const Token) i32 {
         switch (self.*) {
             .Operator => |op| return op.infix_binding_power,
-            .New_Operator => |op| return op.infix_binding_power,
             .EOF => return -1,
             else => return 0,
         }
     }
 };
 
-pub const NEW_TokenStream = struct {
+pub const TokenStream = struct {
     tokens: []Token,
     token_count: usize,
 
@@ -91,9 +74,9 @@ pub const NEW_TokenStream = struct {
         num_state: ?NumericObjectState = null,
 
         pub const TokenConfig = struct {
-            operators: std.ArrayList(NEW_Operator),
+            operators: std.ArrayList(Operator),
 
-            fn check_operator(self: *const TokenConfig, symbol: []const u8) ?*const NEW_Operator {
+            fn check_operator(self: *const TokenConfig, symbol: []const u8) ?*const Operator {
                 for (self.operators.items) |*op| {
                     if (std.mem.eql(u8, symbol, op.symbol))
                         return op;
@@ -205,7 +188,7 @@ pub const NEW_TokenStream = struct {
 
         fn push_keyword_token(self: *Tokenizer, string: []const u8) !void {
             if (self.config.check_operator(string)) |op| {
-                try self.push_token(.{ .New_Operator = op });
+                try self.push_token(.{ .Operator = op });
             } else {
                 try self.push_token(.{ .IdentifierHash = std.hash.Wyhash.hash(0, string)});
             }
@@ -252,7 +235,7 @@ pub const NEW_TokenStream = struct {
             };
         }
 
-        pub fn finish(self: *Tokenizer) !NEW_TokenStream {
+        pub fn finish(self: *Tokenizer) !TokenStream {
             defer self.gpa.free(self.buffer);
             defer self.gpa.free(self.tokens);
 
@@ -282,71 +265,12 @@ pub const NEW_TokenStream = struct {
         }
     };
 
-    pub fn deinit(self: *NEW_TokenStream, gpa: std.mem.Allocator) void {
-        gpa.free(self.tokens);
-    }
-};
-
-pub const TokenStream = struct {
-    tokens: []Token,
-    token_count: usize,
-    config: TokenConfig,
-
-    pub const TokenConfig = struct {
-        operators: std.ArrayList(Operator),
-
-        fn check_operator(self: *const TokenConfig, symbol: u8) ?*const Operator {
-            for (self.operators.items) |*op| {
-                if (op.symbol == symbol)
-                    return op;
-            }
-
-            return null;
-        }
-    };
-
-    pub fn init(gpa: std.mem.Allocator, config: TokenConfig, str: []const u8) !TokenStream {
-        // Initially allocates a buffer equals to the count of characters.
-        var buffer = try gpa.alloc(Token, str.len + 1);
-        var token_count: usize = 0;
-
-        for (str) |ch| {
-            if (std.ascii.isWhitespace(ch))
-                continue;
-
-            if (config.check_operator(ch)) |op| {
-                buffer[token_count] = .{ .Operator = op };
-            } else if (std.ascii.isDigit(ch)) {
-                buffer[token_count] = .{ .Int = try std.fmt.charToDigit(ch, 10) };
-            } else {
-                buffer[token_count] = .{ .Identifier = ch };
-            }
-            token_count += 1;
-        }
-
-        buffer[token_count] = .EOF;
-        token_count += 1;
-
-        if (token_count != str.len) {
-            const new_buffer = try gpa.alloc(Token, token_count);
-            @memmove(new_buffer, buffer[0..token_count]);
-            gpa.free(buffer);
-            buffer = new_buffer;
-        }
-
-        return .{
-            .token_count = token_count,
-            .tokens = buffer,
-            .config = config,
-        };
-    }
-
-    pub fn deinit(self: TokenStream, gpa: std.mem.Allocator) void {
+    pub fn deinit(self: *TokenStream, gpa: std.mem.Allocator) void {
         gpa.free(self.tokens);
     }
 
     pub fn format(self: *const TokenStream, writer: *std.io.Writer) std.Io.Writer.Error!void {
-        for (self.tokens) |token|
+        for (self.tokens) |token| 
             try writer.print("{f} ", .{token});
     }
 };
@@ -385,7 +309,7 @@ pub const SyntaxTree = struct {
     };
 
     const Node_NUD_Identifier = struct {
-        identifier: u8,
+        identifier: u64,
 
         fn interface(self: *Node_NUD_Identifier) INode {
             return .{ 
@@ -394,13 +318,12 @@ pub const SyntaxTree = struct {
                     .format = Node_NUD_Identifier.format,
                     .deinit = Node_NUD_Identifier.deinit,
                     .resolve = Node_NUD_Identifier.resolve,
-                } 
+                }
             };
         }
 
-        pub fn format(ptr: *const anyopaque, writer: *std.io.Writer) std.Io.Writer.Error!void {
-            const self: *const Node_NUD_Identifier = @ptrCast(@alignCast(ptr));
-            try writer.print("{c}", .{self.identifier});
+        pub fn format(_: *const anyopaque, writer: *std.io.Writer) std.Io.Writer.Error!void {
+            try writer.print("IDENT", .{});
         }
 
         fn deinit(ptr: *anyopaque, gpa: std.mem.Allocator) void {
@@ -409,38 +332,40 @@ pub const SyntaxTree = struct {
         }
 
         fn resolve(ptr: *anyopaque, interpreter: *Interpreter) anyerror!void {
-            const self: *Node_NUD_Identifier = @ptrCast(@alignCast(ptr));
-            try interpreter.push(self.identifier);
+            // const self: *Node_NUD_Identifier = @ptrCast(@alignCast(ptr));
+            // try interpreter.push(self.identifier);
+            _ = ptr; _ = interpreter;
         }
     };
 
-    const Node_NUD_Integer = struct {
-        int: u8,
+    const Node_NUD_Literal = struct {
+        lit: ObjectLiteral,
 
-        fn interface(self: *Node_NUD_Integer) INode {
+        fn interface(self: *Node_NUD_Literal) INode {
             return .{ 
                 .ptr = self, 
                 .vtable = &.{
-                    .format = Node_NUD_Integer.format,
-                    .deinit = Node_NUD_Integer.deinit,
-                    .resolve = Node_NUD_Integer.resolve,
+                    .format = Node_NUD_Literal.format,
+                    .deinit = Node_NUD_Literal.deinit,
+                    .resolve = Node_NUD_Literal.resolve,
                 } 
             };
         }
 
         pub fn format(ptr: *const anyopaque, writer: *std.io.Writer) std.Io.Writer.Error!void {
-            const self: *const Node_NUD_Integer = @ptrCast(@alignCast(ptr));
-            try writer.print("{d}", .{self.int});
+            const self: *const Node_NUD_Literal = @ptrCast(@alignCast(ptr));
+            try writer.print("{f}", .{self.lit});
         }
 
         fn deinit(ptr: *anyopaque, gpa: std.mem.Allocator) void {
-            const self: *Node_NUD_Integer = @ptrCast(@alignCast(ptr));
+            const self: *Node_NUD_Literal = @ptrCast(@alignCast(ptr));
             gpa.destroy(self);
         }
 
         fn resolve(ptr: *anyopaque, interpreter: *Interpreter) anyerror!void {
-            const self: *Node_NUD_Integer = @ptrCast(@alignCast(ptr));
-            try interpreter.push(self.int);
+            _ = ptr; _ = interpreter;
+            // const self: *Node_NUD_Literal = @ptrCast(@alignCast(ptr));
+            // try interpreter.push(self.int);
         }
     };
 
@@ -462,7 +387,7 @@ pub const SyntaxTree = struct {
 
         pub fn format(ptr: *const anyopaque, writer: *std.io.Writer) std.Io.Writer.Error!void {
             const self: *const Node_LED_Operator = @ptrCast(@alignCast(ptr));
-            try writer.print("({f} {c} {f})", .{self.left, self.operator.symbol, self.right});
+            try writer.print("({f} {s} {f})", .{self.left, self.operator.symbol, self.right});
         }
 
         fn deinit(ptr: *anyopaque, gpa: std.mem.Allocator) void {
@@ -500,16 +425,16 @@ pub const SyntaxTree = struct {
 
         fn nud(self: *const Parser, token: *const Token) Error !INode {
             switch (token.*) {
-                .Identifier => |id| {
+                .IdentifierHash => |id| {
                     var node = try self.gpa.create(Node_NUD_Identifier);
                     node.*.identifier = id;
 
                     return node.interface();
                 },
 
-                .Int => |i| {
-                    var node = try self.gpa.create(Node_NUD_Integer);
-                    node.*.int = i;
+                .Literal => |lit| {
+                    var node = try self.gpa.create(Node_NUD_Literal);
+                    node.*.lit = lit;
 
                     return node.interface();
                 },

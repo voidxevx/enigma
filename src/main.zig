@@ -26,23 +26,22 @@ fn product(interpreter: *enigma.Interpreter) anyerror!void {
 pub fn main() !void {
     const gpa = std.heap.page_allocator;
 
-    var operators: std.ArrayList(enigma.NEW_Operator) = .empty;
+    var operators: std.ArrayList(enigma.Operator) = .empty;
     try operators.append(gpa, .{
         .symbol = ",",
         .infix_binding_power = 2,
         .resolve = sum,
     });
 
-    var tokenizer = try enigma.NEW_TokenStream.Tokenizer.init("testing 1, 2, 3", .{ .operators = operators }, gpa);
+    var tokenizer = try enigma.TokenStream.Tokenizer.init("1.0, 2, 3", .{ .operators = operators }, gpa);
     try tokenizer.tokenize();
     var tokens = try tokenizer.finish();
     defer tokens.deinit(gpa);
 
-    std.debug.print("token count: {d}\n", .{tokens.token_count});
-    for (0..tokens.token_count) |i| {
-        const token = tokens.tokens[i];
-        std.debug.print("{d} {f}\n", .{i, token});
-    }
+    std.debug.print("{f}\n", .{tokens});
+
+    const ast = try enigma.SyntaxTree.init(gpa, tokens);
+    std.debug.print("{f}", .{ast});
 
     // var operators: std.ArrayList(enigma.Operator) = .empty;
     // try operators.append(gpa, .{
