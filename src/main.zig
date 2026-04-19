@@ -1,4 +1,3 @@
-
 // INCLUDES -----
 const std = @import("std");
 const enigma = @import("enigma");
@@ -13,7 +12,16 @@ pub fn main() !void {
         .infix_binding_power = 3,
     });
 
-    const t_stream = try enigma.TokenStream.init(gpa, .{ .operators = operators }, "x + 1");
+    try operators.append(gpa, .{
+        .symbol = '*',
+        .infix_binding_power = 4,
+    });
 
-    std.debug.print("{f}", .{t_stream});
+    const t_stream = try enigma.TokenStream.init(gpa, .{ .operators = operators }, "x + 1 * 7 + 8");
+
+    std.debug.print("{f}\n", .{t_stream});
+
+    var ast = try enigma.SyntaxTree.init(gpa, t_stream);
+    defer ast.deinit(gpa);
+    std.debug.print("{f}", .{ast});
 }
