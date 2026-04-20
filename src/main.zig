@@ -3,6 +3,18 @@ const std = @import("std");
 const enigma = @import("enigma");
 // ----- INCUDES
 
+const TITLE_CARD: []const u8 = 
+\\ ====================================================================== 
+\\   _____                     ______
+\\  /@    \___________________/      \               
+\\  \  @                              \
+\\  / @                           -----| - - - - 
+\\ |   @   __________________         /
+\\  \_____/                  \_______/
+\\                            
+\\ ====================================================================== 
+;
+
 pub fn main() !void {
     const gpa = std.heap.page_allocator;
 
@@ -21,4 +33,12 @@ pub fn main() !void {
     if (result) |res| {
         std.debug.print("Result: {f}\n", .{res});
     }
+
+
+    var pinar_buffer: [4096]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&pinar_buffer);
+    var stdout = &stdout_writer.interface;
+
+    try stdout.print("{s}", .{TITLE_CARD});
+    try stdout.flush();
 }
