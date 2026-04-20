@@ -31,34 +31,32 @@ pub fn main() !void {
     try stdout.print("\x1b[2J\x1b[H\x1b[34m{s}\x1b[0m\n", .{TITLE_CARD});
     try stdout.flush();
 
-    const operators = enigma.default_operators(gpa);
+    const operators = try enigma.default_operators(gpa);
     var interpreter = try enigma.Interpreter.init(gpa);
     defer interpreter.deinit();
 
     while (true) {
+        try stdout.print(">> ", .{});
+        try stdout.flush();
+
         const input = try stdin.takeDelimiterExclusive('\n');
-        if (std.mem.eql(u8, input, "end")) {
-            break;         
-        } else {
-            var token_stream = try enigma.TokenStream.init(gpa, input, .{ .operators = operators });
-            
+        stdin.toss(1); 
+       
+        var token_stream = try enigma.TokenStream.init(gpa, input, .{ .operators = operators });
+
+        if (token_stream.token_count == 1)
+            break;
+
+        defer token_stream.deinit(gpa);
+        var ast = try enigma.SyntaxTree.init(gpa, token_stream);
+        defer ast.deinit(gpa);
+
+        const result = try interpreter.run(&ast);
+        if (result) |res| {
+            try stdout.print("= {f}\n", .{res});
         }
+
+        try stdout.flush();
     }
 
-
-    // const operators = try enigma.default_operators(gpa);    
-    // var tokens = try enigma.TokenStream.init(gpa, "(2 + 7) * 8 / 4", .{ .operators = operators});
-    // defer tokens.deinit(gpa);
-
-    // std.debug.print("{f}\n", .{tokens});
-
-    // var ast = try enigma.SyntaxTree.init(gpa, tokens);
-    // std.debug.print("{f}\n", .{ast});
-
-    // var interpreter = try enigma.Interpreter.init(gpa);
-    // const result = try interpreter.run(&ast);
-
-    // if (result) |res| {
-    //     std.debug.print("Result: {f}\n", .{res});
-    // }
 }
