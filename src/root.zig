@@ -22,8 +22,8 @@ pub const ObjectLiteral = union(enum) {
 
     pub fn format(self: *const ObjectLiteral, writer: *std.io.Writer) std.Io.Writer.Error!void {
         switch (self.*) {
-            .Integer => |i| try writer.print("{d}i", .{i}),
-            .Float => |f| try writer.print("{d}f", .{f}),
+            .Integer => |i| try writer.print("{d}", .{i}),
+            .Float => |f| try writer.print("{d}", .{f}),
         }
     }
 };
@@ -32,6 +32,8 @@ pub const Token = union(enum) {
     Literal: ObjectLiteral,
     IdentifierHash: u64,
     Operator: *const Operator,
+    LeftParenthetical,
+    RightParenthetical,
     EOF,
 
     pub fn format(self: *const Token, writer: *std.io.Writer) std.Io.Writer.Error!void {
@@ -39,6 +41,8 @@ pub const Token = union(enum) {
             .IdentifierHash => try writer.print("IDENT", .{}),
             .Literal => |lit| try lit.format(writer),
             .Operator => |op| try writer.print("{f}", .{op}),
+            .LeftParenthetical => try writer.print("(", .{}),
+            .RightParenthetical => try writer.print(")", .{}),
             .EOF => try writer.print("eof", .{}),
         }
     }
@@ -225,6 +229,21 @@ pub const TokenStream = struct {
             }
         }
 
+        fn check_parenthetical(self: *Tokenizer) !bool {
+            switch (self.peek()) {
+                '(' => {
+                    try self.push_buffer();
+                    try self.push_token(.LeftParenthetical);
+                },
+                ')' => {
+                    try self.push_buffer();
+                    try self.push_token(.RightParenthetical);
+                },
+                else => return false,
+            }
+            return true;
+        }
+
         pub fn init(string: []const u8, config: TokenConfig, gpa: std.mem.Allocator) !Tokenizer {
             return .{
                 .string = string,
@@ -254,6 +273,8 @@ pub const TokenStream = struct {
                 if (std.ascii.isWhitespace(self.peek())) {
                     try self.push_buffer();
                     self.*.state = .None;
+                } else if (try self.check_parenthetical()) {
+                    self.*.state = .None;
                 } else if (try self.check_state() == .OutOfDate) {
                     self.switch_state();
                     try self.consume_character();
@@ -264,6 +285,12 @@ pub const TokenStream = struct {
             try self.push_token(.EOF);
         }
     };
+
+    pub fn init(gpa: std.mem.Allocator, string: []const u8, config: Tokenizer.TokenConfig) !TokenStream {
+        var tokenizer = try Tokenizer.init(string, config, gpa);
+        try tokenizer.tokenize();
+        return tokenizer.finish();
+    }
 
     pub fn deinit(self: *TokenStream, gpa: std.mem.Allocator) void {
         gpa.free(self.tokens);
@@ -332,9 +359,8 @@ pub const SyntaxTree = struct {
         }
 
         fn resolve(ptr: *anyopaque, interpreter: *Interpreter) anyerror!void {
-            // const self: *Node_NUD_Identifier = @ptrCast(@alignCast(ptr));
-            // try interpreter.push(self.identifier);
-            _ = ptr; _ = interpreter;
+            const self: *Node_NUD_Identifier = @ptrCast(@alignCast(ptr));
+            try interpreter.push(.{ .Identifier = self.identifier });
         }
     };
 
@@ -363,9 +389,8 @@ pub const SyntaxTree = struct {
         }
 
         fn resolve(ptr: *anyopaque, interpreter: *Interpreter) anyerror!void {
-            _ = ptr; _ = interpreter;
-            // const self: *Node_NUD_Literal = @ptrCast(@alignCast(ptr));
-            // try interpreter.push(self.int);
+            const self: *Node_NUD_Literal = @ptrCast(@alignCast(ptr));
+            try interpreter.push(.{ .Literal = self.lit });
         }
     };
 
@@ -413,6 +438,7 @@ pub const SyntaxTree = struct {
         const Error = error{
             NoNUDForToken,
             NoLEDForToken,
+            ExpectedRightParenthetical,
         } || anyerror;
 
         fn peek(self: *const Parser) *const Token {
@@ -423,7 +449,7 @@ pub const SyntaxTree = struct {
             self.*.idx += 1;
         }
 
-        fn nud(self: *const Parser, token: *const Token) Error !INode {
+        fn nud(self: *Parser, token: *const Token) Error !INode {
             switch (token.*) {
                 .IdentifierHash => |id| {
                     var node = try self.gpa.create(Node_NUD_Identifier);
@@ -437,6 +463,14 @@ pub const SyntaxTree = struct {
                     node.*.lit = lit;
 
                     return node.interface();
+                },
+
+                .LeftParenthetical => {
+                    self.next();
+                    const node = try self.expr(0);
+                    if (self.peek().* != .RightParenthetical)
+                        return Error.ExpectedRightParenthetical;
+                    return node;
                 },
 
                 else => return Error.NoNUDForToken,
@@ -492,11 +526,23 @@ pub const SyntaxTree = struct {
 
 
 // INTERPRETING -----
+pub const Object = union(enum) {
+    Literal: ObjectLiteral,
+    Identifier: u64,
+
+    pub fn format(self: *const Object, writer: *std.io.Writer) std.Io.Writer.Error!void {
+        switch (self.*) {
+            .Identifier => try writer.print("IDENT", .{}),
+            .Literal => |lit| try lit.format(writer),
+        }
+    }
+};
+
 pub const Interpreter = struct {
     const DEFAULT_STACK_CAPACITY: usize = 16;
 
-    heap: std.AutoHashMap(u8, u8),
-    stack: []u8,
+    heap: std.AutoHashMap(u64, Object),
+    stack: []Object,
     stack_ptr: usize = 0,
     stack_capacity: usize = DEFAULT_STACK_CAPACITY,
     gpa: std.mem.Allocator,
@@ -504,7 +550,7 @@ pub const Interpreter = struct {
     pub fn init(gpa: std.mem.Allocator) !Interpreter {
         return .{
             .heap = .init(gpa),
-            .stack = try gpa.alloc(u8, DEFAULT_STACK_CAPACITY),
+            .stack = try gpa.alloc(Object, DEFAULT_STACK_CAPACITY),
             .gpa = gpa,
         };
     }
@@ -515,13 +561,12 @@ pub const Interpreter = struct {
     }
 
     pub fn flush(self: *Interpreter) !void {
-        self.gpa.free(self.stack);
         self.stack_capacity = DEFAULT_STACK_CAPACITY;
         self.stack_ptr = 0;
-        self.stack = try self.gpa.alloc(u8, DEFAULT_STACK_CAPACITY);
+        self.stack = try self.gpa.realloc(self.stack, DEFAULT_STACK_CAPACITY);
     }
 
-    pub fn push(self: *Interpreter, val: u8) !void {
+    pub fn push(self: *Interpreter, val: Object) !void {
         if (self.stack_ptr >= self.stack_capacity) {
             self.*.stack_capacity *= 2;
             self.*.stack = try self.gpa.realloc(self.stack, self.stack_capacity);
@@ -531,7 +576,7 @@ pub const Interpreter = struct {
         self.*.stack_ptr += 1;
     }
 
-    pub fn pop(self: *Interpreter) ?u8 {
+    pub fn pop(self: *Interpreter) ?Object {
         if (self.stack_ptr == 0)
             return null;
 
@@ -539,17 +584,200 @@ pub const Interpreter = struct {
         return self.stack[self.stack_ptr];
     }
 
-    pub fn emplace_variable(self: *Interpreter, identifier: u8, value: u8) !void {
-        try self.heap.put(identifier, value);
-    }
+    // pub fn emplace_variable(self: *Interpreter, identifier: u8, value: u8) !void {
+    //     try self.heap.put(identifier, value);
+    // }
 
-    pub fn get_variable(self: Interpreter, identifier: u8) ?u8 {
-        return self.heap.get(identifier);
-    }
+    // pub fn get_variable(self: Interpreter, identifier: u8) ?u8 {
+    //     return self.heap.get(identifier);
+    // }
 
-    pub fn run(self: *Interpreter, ast: *SyntaxTree) !?u8 {
+    pub fn run(self: *Interpreter, ast: *SyntaxTree) !?Object {
         try ast.head.resolve(self);
         return self.pop();
     }
 };
 // ----- INTERPRETING
+
+// OPERATIONS -----
+pub fn add(interpreter: *Interpreter) anyerror!void {
+    const r = interpreter.pop();
+    const l = interpreter.pop();
+
+    if (l) |l_val| 
+    if (r) |r_val| {
+        switch (l_val) {
+        .Literal => |l_lit|
+            switch (r_val) {
+            .Literal => |r_lit|
+                switch (l_lit) {
+                .Integer => |l_int|
+                    switch (r_lit) {
+                    .Integer => |r_int|
+                        try interpreter.push(.{ .Literal = .{ .Integer = l_int + r_int } }),
+                    .Float => |r_float| {
+                        const l_float: f64 = @floatFromInt(l_int);
+                        try interpreter.push(.{ .Literal = .{ .Float = l_float + r_float } });
+                    }
+                    },
+                .Float => |l_float|
+                    switch (r_lit) {
+                    .Integer => |r_int| {
+                        const r_float: f64 = @floatFromInt(r_int);
+                        try interpreter.push(.{ .Literal = .{ .Float = l_float + r_float } });
+                    },
+                    .Float => |r_float| 
+                        try interpreter.push(.{ .Literal = .{ .Float = l_float + r_float } })
+                    }
+                },
+            else => {}
+            },
+        else => {}
+        }
+    };
+}
+
+pub fn mul(interpreter: *Interpreter) anyerror!void {
+    const r = interpreter.pop();
+    const l = interpreter.pop();
+
+    if (l) |l_val| 
+    if (r) |r_val| {
+        switch (l_val) {
+        .Literal => |l_lit|
+            switch (r_val) {
+            .Literal => |r_lit|
+                switch (l_lit) {
+                .Integer => |l_int|
+                    switch (r_lit) {
+                    .Integer => |r_int|
+                        try interpreter.push(.{ .Literal = .{ .Integer = l_int * r_int } }),
+                    .Float => |r_float| {
+                        const l_float: f64 = @floatFromInt(l_int);
+                        try interpreter.push(.{ .Literal = .{ .Float = l_float * r_float } });
+                    }
+                    },
+                .Float => |l_float|
+                    switch (r_lit) {
+                    .Integer => |r_int| {
+                        const r_float: f64 = @floatFromInt(r_int);
+                        try interpreter.push(.{ .Literal = .{ .Float = l_float * r_float } });
+                    },
+                    .Float => |r_float| 
+                        try interpreter.push(.{ .Literal = .{ .Float = l_float * r_float } })
+                    }
+                },
+            else => {}
+            },
+        else => {}
+        }
+    };
+}
+
+pub fn sub(interpreter: *Interpreter) anyerror!void {
+    const r = interpreter.pop();
+    const l = interpreter.pop();
+
+    if (l) |l_val| 
+    if (r) |r_val| {
+        switch (l_val) {
+        .Literal => |l_lit|
+            switch (r_val) {
+            .Literal => |r_lit|
+                switch (l_lit) {
+                .Integer => |l_int|
+                    switch (r_lit) {
+                    .Integer => |r_int|
+                        try interpreter.push(.{ .Literal = .{ .Integer = l_int - r_int } }),
+                    .Float => |r_float| {
+                        const l_float: f64 = @floatFromInt(l_int);
+                        try interpreter.push(.{ .Literal = .{ .Float = l_float - r_float } });
+                    }
+                    },
+                .Float => |l_float|
+                    switch (r_lit) {
+                    .Integer => |r_int| {
+                        const r_float: f64 = @floatFromInt(r_int);
+                        try interpreter.push(.{ .Literal = .{ .Float = l_float - r_float } });
+                    },
+                    .Float => |r_float| 
+                        try interpreter.push(.{ .Literal = .{ .Float = l_float - r_float } })
+                    }
+                },
+            else => {}
+            },
+        else => {}
+        }
+    };
+}
+
+pub fn div(interpreter: *Interpreter) anyerror!void {
+    const r = interpreter.pop();
+    const l = interpreter.pop();
+
+    if (l) |l_val| 
+    if (r) |r_val| {
+        switch (l_val) {
+        .Literal => |l_lit|
+            switch (r_val) {
+            .Literal => |r_lit|
+                switch (l_lit) {
+                .Integer => |l_int|
+                    switch (r_lit) {
+                    .Integer => |r_int| {
+                        const l_float: f64 = @floatFromInt(l_int);
+                        const r_float: f64 = @floatFromInt(r_int);
+                        try interpreter.push(.{ .Literal = .{ .Float = l_float / r_float } });
+                    },
+                    .Float => |r_float| {
+                        const l_float: f64 = @floatFromInt(l_int);
+                        try interpreter.push(.{ .Literal = .{ .Float = l_float / r_float } });
+                    }
+                    },
+                .Float => |l_float|
+                    switch (r_lit) {
+                    .Integer => |r_int| {
+                        const r_float: f64 = @floatFromInt(r_int);
+                        try interpreter.push(.{ .Literal = .{ .Float = l_float / r_float } });
+                    },
+                    .Float => |r_float| 
+                        try interpreter.push(.{ .Literal = .{ .Float = l_float / r_float } })
+                    }
+                },
+            else => {}
+            },
+        else => {}
+        }
+    };
+}
+
+pub fn default_operators(gpa: std.mem.Allocator) !std.ArrayList(Operator) {
+    var operators: std.ArrayList(Operator) = .empty;
+    try operators.append(gpa, .{
+        .symbol = "+",
+        .infix_binding_power = 3,
+        .resolve = add,
+    });
+
+    try operators.append(gpa, .{
+        .symbol = "*",
+        .infix_binding_power = 4,
+        .resolve = mul,
+    });
+
+    try operators.append(gpa, .{
+        .symbol = "-",
+        .infix_binding_power = 3,
+        .resolve = sub,
+    });
+
+    try operators.append(gpa, .{
+        .symbol = "/",
+        .infix_binding_power = 4,
+        .resolve = div,
+    });
+
+    return operators;
+}
+
+// ----- OPERATIONS
