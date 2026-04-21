@@ -1,3 +1,5 @@
+//! Enigma
+
 // INCLUDES -----
 const std = @import("std");
 const enigma = @import("enigma");

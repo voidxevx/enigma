@@ -1,9 +1,12 @@
 //! # Enigma
-//! 4/18/2026 - Nyx
+//! 4/18/2026
 //! 
-//! Enigma is a mini parser and tokenizer implementing a Deterministic Finite Automata and Pratt parsing algorithms.
+//! Enigma is a mini parser and tokenizer implementing a Deterministic Finite Automata and Pratt Parsing algorithms.
 //! 
-//! This is a snapshot clearing out any unused parts. The snapshot implements a mini calculator for interactability.
+//! This is a snapshot of this project.
+//! This snapshot implements a mini calculator for intractability.
+//! I did not right this specifically for the the PT so this is not the full
+//! version. Much of the full code and docs were stripped to make it more palatable.
 
 // INCLUDES -----
 const std = @import("std");
@@ -53,8 +56,8 @@ pub const ObjectLiteral = union(enum) {
 
 /// Token
 /// 
-/// A Token is a simplefied version of an identifier, number, or keyword.
-/// Tokens are used to make interpriting a file faster and easier by grouping tokens by type.
+/// A Token is a simplified version of an identifier, number, or keyword.
+/// Tokens are used to make interpreting a file faster and easier by grouping tokens by type.
 pub const Token = union(enum) {
 
     /// Literal Token - An static object literal
@@ -172,7 +175,7 @@ pub const TokenStream = struct {
 
         /// Token Configuration
         /// 
-        /// In This version the only configurables are operators.
+        /// In This version the only configurable are operators.
         pub const TokenConfig = struct {
 
             /// All the operators that can be tokenized
@@ -260,7 +263,7 @@ pub const TokenStream = struct {
             }
         }
 
-        /// Switch to a new state using the current charater,
+        /// Switch to a new state using the current character,
         fn switch_state(self: *Tokenizer) void {
             const current = self.peek();
             self.*.num_state = null;
@@ -439,7 +442,7 @@ pub const SyntaxTree = struct {
     /// Node Interface
     /// 
     /// Class Interface for Nodes. Since Zig has no form of polymorphism manual interfaces
-    /// are required. All varients of Node must implement an `interface` method that returns an
+    /// are required. All variants of Node must implement an `interface` method that returns an
     /// INode which represents the vtable of the object.
     pub const INode = struct {
         ptr: *anyopaque,
@@ -467,17 +470,17 @@ pub const SyntaxTree = struct {
                 _deinit(self.ptr, gpa);
         }
 
-        /// Resolves the functionaity of the node.
+        /// Resolves the functionality of the node.
         pub fn resolve(self: *INode, interpreter: *Interpreter) !void {
             try self.vtable.resolve(self.ptr, interpreter);
         }
     };
 
-    /// Identfier Node (Null Denotation)
+    /// Identifier Node (Null Denotation)
     /// 
     /// Contains an identifier.
     /// 
-    /// In the current version identifiers dont do anything but in other version they are used for 
+    /// In the current version identifiers don't do anything but in other version they are used for 
     /// assigning variables.
     const Node_NUD_Identifier = struct {
         identifier: u64,
@@ -587,7 +590,7 @@ pub const SyntaxTree = struct {
     /// Parsers convert a token stream into an Abstract Syntax Tree.
     /// 
     /// This implementation uses the Pratt Parsing/Precedence climbing algorithm.
-    /// In this algortithm uses two node type: nud and led.
+    /// In this algorithm uses two node type: nud and led.
     /// * Nud: Null Denotation, Represents a node that has no other left tokens and will result in a leaf node of the AST.
     /// * LED: Left Denotation, Represents a node with a left and right child nodes.   
     const Parser = struct {
@@ -613,7 +616,7 @@ pub const SyntaxTree = struct {
             return &self.token_stream.tokens[self.idx];
         }
 
-        /// Procedes to the next token.
+        /// Precedes to the next token.
         fn next(self: *Parser) void {
             self.*.idx += 1;
         }
@@ -687,7 +690,7 @@ pub const SyntaxTree = struct {
         return .{ .head = head };
     }
 
-    /// Recursively deallocates the nodes of the AST.
+    /// Recursively deallocate the nodes of the AST.
     pub fn deinit(self: *SyntaxTree, gpa: std.mem.Allocator) void {
         self.head.deinit(gpa);
     }
@@ -716,9 +719,9 @@ pub const Object = union(enum) {
 
 /// Interpreter
 /// 
-/// Stores the data that is used during the interpritation of the AST.
+/// Stores the data that is used during the interpretation of the AST.
 /// 
-/// In this version I dissabled variables and the vitual heap.
+/// In this version I disabled variables and the virtual heap.
 pub const Interpreter = struct {
 
     /// The default size of the stack. The stack will automatically grow if the capacity is reached.
@@ -738,7 +741,7 @@ pub const Interpreter = struct {
     //// General purpose allocator.
     gpa: std.mem.Allocator,
 
-    /// Initalizes the stack
+    /// Initializes the stack
     pub fn init(gpa: std.mem.Allocator) !Interpreter {
         return .{
             // .heap = .init(gpa),
@@ -747,7 +750,7 @@ pub const Interpreter = struct {
         };
     }
 
-    /// Frees allocated resoursed
+    /// Frees allocated resourced
     pub fn deinit(self: *Interpreter) void {
         // self.heap.deinit();
         self.gpa.free(self.stack);
