@@ -1,3 +1,10 @@
 .zig-cache/
 zig-out/
 *.o
+
+Tests/
+.build/
+
+# Added by cargo
+
+/target
