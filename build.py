@@ -4,14 +4,18 @@ import subprocess
 import shutil
 from enum import Enum, auto
 
-LIB_DIRECTORY = "./zig-out/lib"
+
 TARGET_DIRECTORY = "./bin"
 RUST_TARGET_DIRECTORY = "./target/debug"
 
 if os.name == "nt":
+    IS_WINDOWS = True
     BINARY_FILE_EXTENSION = ".exe"
+    LIB_DIRECTORY = "./zig-out/bin"
 else:
+    IS_WINDOWS = False
     BINARY_FILE_EXTENSION = ""
+    LIB_DIRECTORY = "./zig-out/lib"
 
 BINARY_FILE_NAME = "enigma"
 
@@ -21,15 +25,16 @@ def step_build() -> bool:
         print("\x1b[31mFailed to build Zig\x1b[0m")
         return False
 
-    # TODO: copy so files to target
     for file in os.listdir(LIB_DIRECTORY):
+        _, extension = os.path.splitext(file)
         src_path = os.path.join(LIB_DIRECTORY, file)
         target_path = os.path.join(TARGET_DIRECTORY, file)
         rust_target_path = os.path.join(RUST_TARGET_DIRECTORY, file)
 
         if os.path.isfile(src_path):
-            shutil.copy2(src_path, target_path)
-            shutil.copy2(src_path, rust_target_path)
+            if not IS_WINDOWS or extension == ".dll":
+                shutil.copy2(src_path, target_path)
+                shutil.copy2(src_path, rust_target_path)
 
     if subprocess.call(["cargo", "zigbuild"]) != 0:
         print("\x1b[31mFailed to build Rust\x1b[0m")
