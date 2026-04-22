@@ -3,6 +3,7 @@
         "LEXICS",
         "memcpy",
         "memmove",
+        "RUSTFLAGS",
         "ubyte",
         "Wyhash"
     ],

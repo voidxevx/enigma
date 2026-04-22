@@ -1,9 +1,11 @@
+# compiler artifacts and binaries
 .zig-cache/
 zig-out/
 *.o
-
-Tests/
 .build/
+bin/*
+
+.vscode
 
 # Added by cargo
 

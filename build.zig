@@ -46,4 +46,11 @@ pub fn build(b: *std.Build) void {
     });
 
     b.installArtifact(c_lib);
+
+    const tests = b.addTest(.{
+        .root_module = mod,
+    });
+
+    const test_step = b.step("test", "Run Tests");
+    test_step.dependOn(&tests.step);
 }
