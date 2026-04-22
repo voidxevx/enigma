@@ -12,6 +12,7 @@ unsafe extern "C" {
     unsafe fn destroy_interpreter(interpreter: *mut RawInterpreter);
     unsafe fn push_to_interpreter(interpreter: *mut RawInterpreter, data: Object);
     unsafe fn pop_from_interpreter(interpreter: *mut RawInterpreter) -> Object;
+    unsafe fn flush_interpreter(interpreter: *mut RawInterpreter);
 }
 
 pub struct Interpreter {
@@ -31,6 +32,10 @@ impl Interpreter {
 
     pub fn pop(&self) -> Object {
         unsafe {pop_from_interpreter(self.raw)}
+    }
+
+    pub fn flush(&self) {
+        unsafe {flush_interpreter(self.raw);}
     }
 }
 

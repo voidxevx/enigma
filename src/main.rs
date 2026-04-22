@@ -1,19 +1,6 @@
 use enigma::{application::Application, interpreter::{Interpreter, objects::{Object}}};
 
-unsafe extern "C" {
-    unsafe fn zig_test();
-}
-
-fn rust_test() {
-    println!("Hello from rust!");
-}
-
 fn main() {
-    rust_test();
-    unsafe {
-        zig_test();
-    }
-
     let interpreter = Interpreter::new();
 
     #[allow(unused)]

@@ -38,6 +38,12 @@ pub const Interpreter = struct {
         self.stack_ptr -= 1;
         return self.stack[self.stack_ptr];
     }
+
+    pub fn flush(self: *Interpreter) !void {
+        self.*.stack = try core.allocator.realloc(self.stack, DEFAULT_STACK_CAPACITY);
+        self.*.stack_ptr = 0;
+        self.*.stack_capacity = DEFAULT_STACK_CAPACITY;
+    }
 };
 
 pub export fn new_interpreter() *Interpreter {
@@ -54,4 +60,8 @@ pub export fn push_to_interpreter(interpreter: *Interpreter, data: objects.Objec
 
 pub export fn pop_from_interpreter(interpreter: *Interpreter) objects.Object {
     return interpreter.pop();
+}
+
+pub export fn flush_interpreter(interpreter: *Interpreter) void {
+    interpreter.flush() catch @panic("failed to flush stack");
 }

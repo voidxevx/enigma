@@ -1,4 +1,6 @@
 
+pub type IdentifierHash = u64;
+
 #[repr(C)]
 pub union Object {
     pub int: i32,
@@ -7,4 +9,6 @@ pub union Object {
     pub ulong: u64,
     pub float: f32,
     pub double: f64,
+
+    pub identifier: IdentifierHash,
 }
