@@ -1,4 +1,4 @@
-use enigma::{application::Application, test::{TestStruct}};
+use enigma::{application::Application, interpreter::{destroy_interpreter, new_interpreter, objects::{Object, test_objects}}, test::TestStruct};
 
 unsafe extern "C" {
     unsafe fn zig_test();
@@ -18,6 +18,7 @@ fn main() {
         c_test();
         cpp_test();
     }
+    let interp = unsafe {new_interpreter()};
 
     #[allow(unused)]
     let app = Application::new("Enigma");
@@ -26,5 +27,9 @@ fn main() {
     unsafe {
         let test_st = TestStruct::new(34);
         c_use_test(&test_st);
+
+        let obj = Object {int: 32};
+        test_objects(obj);
+        destroy_interpreter(interp);
     }
 }

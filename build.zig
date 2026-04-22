@@ -16,6 +16,9 @@ pub fn build(b: *std.Build) void {
         .root_module = mod,
     });
 
+    lib.linkLibC();
+    lib.addIncludePath(b.path("src/"));
+
     b.installArtifact(lib);
 
     const c_lib = b.addLibrary(.{
@@ -29,21 +32,13 @@ pub fn build(b: *std.Build) void {
 
     c_lib.linkLibC();
     c_lib.linkLibCpp();
-    c_lib.addCSourceFiles(.{
-        .files = &.{
-            "src/test.c",
-        },
+    c_lib.addCSourceFiles(.{ .files = &.{
+        "src/test.c",
+    }, .flags = &.{"-std=c17"} });
 
-        .flags = &.{"-std=c17"}
-    });
-
-    c_lib.addCSourceFiles(.{
-        .files = &.{
-            "src/test.cpp",
-        },
-
-        .flags = &.{"-std=c++17"}
-    });
+    c_lib.addCSourceFiles(.{ .files = &.{
+        "src/test.cpp",
+    }, .flags = &.{"-std=c++17"} });
 
     b.installArtifact(c_lib);
 
