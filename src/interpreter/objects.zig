@@ -8,7 +8,3 @@ pub const Object = extern union {
     float: f32,
     double: f64,
 };
-
-pub export fn test_objects(obj: Object) void {
-    std.debug.print("object int value: {d}\n", .{obj.int});
-}

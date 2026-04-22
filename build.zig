@@ -21,26 +21,26 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(lib);
 
-    const c_lib = b.addLibrary(.{
-        .linkage = .dynamic,
-        .name = "enigma",
-        .root_module = b.addModule("enigma", .{
-            .optimize = optimize,
-            .target = target,
-        }),
-    });
+    // const c_lib = b.addLibrary(.{
+    //     .linkage = .dynamic,
+    //     .name = "enigma",
+    //     .root_module = b.addModule("enigma", .{
+    //         .optimize = optimize,
+    //         .target = target,
+    //     }),
+    // });
 
-    c_lib.linkLibC();
-    c_lib.linkLibCpp();
-    c_lib.addCSourceFiles(.{ .files = &.{
-        "src/test.c",
-    }, .flags = &.{"-std=c17"} });
+    // c_lib.linkLibC();
+    // c_lib.linkLibCpp();
+    // c_lib.addCSourceFiles(.{ .files = &.{
+    //     "src/test.c",
+    // }, .flags = &.{"-std=c17"} });
 
-    c_lib.addCSourceFiles(.{ .files = &.{
-        "src/test.cpp",
-    }, .flags = &.{"-std=c++17"} });
+    // c_lib.addCSourceFiles(.{ .files = &.{
+    //     "src/test.cpp",
+    // }, .flags = &.{"-std=c++17"} });
 
-    b.installArtifact(c_lib);
+    // b.installArtifact(c_lib);
 
     const tests = b.addTest(.{
         .root_module = mod,

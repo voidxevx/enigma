@@ -1,13 +1,12 @@
 const std = @import("std");
-const test_struct = @import("test/test.zig");
 const Objects = @import("interpreter/objects.zig");
 const interpreter = @import("interpreter/interpreter.zig");
 
 comptime {
-    _ = test_struct.use_test;
-    _ = Objects.test_objects;
     _ = interpreter.new_interpreter;
     _ = interpreter.destroy_interpreter;
+    _ = interpreter.push_to_interpreter;
+    _ = interpreter.pop_from_interpreter;
 }
 
 export fn zig_test() void {

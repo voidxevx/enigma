@@ -1,8 +1,4 @@
 
-unsafe extern "C" {
-    pub unsafe fn test_objects(obj: Object);
-}
-
 #[repr(C)]
 pub union Object {
     pub int: i32,
