@@ -19,5 +19,7 @@ comptime {
     _ = interpreter.interpreter_free;
     _ = interpreter.interpreter_get;
     _ = interpreter.interpreter_get_mut;
+
+    _ = interpreter.lexics.TokenStream;
     // ----- Interpreter ffi bindings
 }

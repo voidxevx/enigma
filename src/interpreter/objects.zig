@@ -14,6 +14,10 @@ pub const IdentifierHash = usize;
 /// The exact type that the object manifests as cannot be determined at runtime so compile time
 /// type checks are required.
 pub const Object = extern union {
+    byte: i8,
+    ubyte: u8,
+    short: i16,
+    ushort: u16,
     int: i32,
     uint: u32,
     long: i64,

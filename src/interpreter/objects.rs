@@ -15,6 +15,10 @@ pub type IdentifierHash = usize;
 /// The exact type that the object manifests as cannot be determined at runtime so compile time
 /// type checks are required.
 pub union Object {
+    pub byte: i8,
+    pub ubyte: u8,
+    pub short: i16,
+    pub ushort: u16,
     pub int: i32,
     pub uint: u32,
     pub long: u64,
