@@ -1,5 +1,4 @@
-
-pub type IdentifierHash = u64;
+pub type IdentifierHash = usize;
 
 #[repr(C)]
 pub union Object {
