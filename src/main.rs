@@ -1,4 +1,10 @@
-use enigma::{application::Application, interpreter::{Interpreter, objects::{Object}}};
+use enigma::{
+    application::Application, 
+    interpreter::{
+        Interpreter, 
+        objects::Object
+    }
+};
 
 fn main() {
     let mut interpreter = Interpreter::new();
@@ -8,7 +14,7 @@ fn main() {
     // app.main_loop();
 
     interpreter.push(Object { int: 70 });
-    let popped_val = interpreter.pop();
+    let popped_val = interpreter.pop().unwrap();
     unsafe {
         println!("Popped int: {}", popped_val.int);
     }

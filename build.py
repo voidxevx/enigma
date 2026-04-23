@@ -1,24 +1,41 @@
+"""
+    Enigma Build Script
+    4/22/2026 - Nyx
+
+    Builds, initializes, and organizes all necessary build tools
+    and generated binaries. 
+
+    Usage:
+    >> python build.py <build> <test> <run>
+"""
+
+# INCLUDES -----
 import sys
 import os
 import subprocess
 import shutil
 from enum import Enum, auto
+# ----- INCLUDES
 
-
+# CONSTANTS ----
 TARGET_DIRECTORY = "./bin"
 RUST_TARGET_DIRECTORY = "./target/debug"
 
-if os.name == "nt":
-    IS_WINDOWS = True
+# Windows specific
+IS_WINDOWS = os.name == "nt"
+if IS_WINDOWS:
     BINARY_FILE_EXTENSION = ".exe"
     LIB_DIRECTORY = "./zig-out/bin"
 else:
-    IS_WINDOWS = False
     BINARY_FILE_EXTENSION = ""
     LIB_DIRECTORY = "./zig-out/lib"
 
 BINARY_FILE_NAME = "enigma"
+# ---- CONSTANTS
 
+# Calls the build tools for Rust and Zig and moves 
+# the generated executable and dynamic libraries
+# into a shared folder.
 def step_build() -> bool:
     print("\x1b[32mBuilding...\x1b[0m")
     if subprocess.call(["zig", "build"]) != 0:
@@ -47,12 +64,14 @@ def step_build() -> bool:
 
     return True
 
+# Runs the created binary
 def run_step() -> bool:
     print("\x1b[32mRunning...\x1b[0m")
     binary_path = os.path.join(TARGET_DIRECTORY, BINARY_FILE_NAME + BINARY_FILE_EXTENSION)
     return subprocess.call([binary_path]) == 0
 
 
+# Runs available tests for Zig and Rust
 def test_step() -> bool:
     print("\x1b[32mTesting...\x1b[0m")
     if subprocess.call(["zig", "build", "test"]) != 0:

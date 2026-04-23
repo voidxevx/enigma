@@ -1,6 +1,19 @@
+//! # Objects
+//! 4/22/2026 - Nyx
+//! 
+//! An identical Zig implementation can be found at: ./objects.zig
+
+/// Hashed Identifier
+/// 
+/// An identifier that was hashed into a smaller sequence to allow for more efficient memory management.
 pub type IdentifierHash = usize;
 
 #[repr(C)]
+/// Interpreter Object
+/// 
+/// 8byte union of all possible types that an object stored by the interpreter can take.
+/// The exact type that the object manifests as cannot be determined at runtime so compile time
+/// type checks are required.
 pub union Object {
     pub int: i32,
     pub uint: u32,
@@ -9,5 +22,8 @@ pub union Object {
     pub float: f32,
     pub double: f64,
 
+    /// Identifier
+    /// 
+    /// Works as either a variable name or a pointer
     pub identifier: IdentifierHash,
 }

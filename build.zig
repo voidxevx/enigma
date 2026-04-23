@@ -1,3 +1,7 @@
+//! Zig Build Script
+//! 4/22/2026 - Nyx
+
+// INCLUDES -----
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
