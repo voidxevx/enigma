@@ -12,9 +12,22 @@ const Token = tokens_stream.TokenStream.Token;
 
 
 /// Abstract Syntax Tree (AST)
+/// 
+/// The abstract syntax tree or AST is a tree representation
+/// of the flow of execution for operators. The operator consists of two node 
+/// types: Null denotation (NUD) essentially leaf nodes and Left denotation (LED) branching nodes.
+/// Null denotations are single objects or unary operators that either hold a single value or another
+/// node. Left denotations hold a left and right half of a tree. 
 pub const SyntaxTree = struct {
+    /// The head node of the AST
     head: INode,
 
+    /// Node Interface
+    /// 
+    /// Interface class for AST Nodes. Since Zig has no form of polymorphism built in 
+    /// I must implement it manually via vtables. The Interface Node class wrappes an opaque
+    /// pointer to the object as well as a vtable containing all of its methods. This is identical
+    /// to how polymorphism and virtual functions work in every other language.
     const INode = struct {
         ptr: *anyopaque,
         vtable: *const VTable,
@@ -37,6 +50,9 @@ pub const SyntaxTree = struct {
         }
     };
 
+    /// Binary Operator Node (Left Denotation)
+    /// 
+    /// Represents a binary operator with a left and right value.
     const Node_LED_BinaryOperator = struct {
         left: INode,
         right: INode,
@@ -65,6 +81,9 @@ pub const SyntaxTree = struct {
         }
     };
 
+    /// Unary Operator Node (Null Denotation)
+    /// 
+    /// Represents a unary operator with a single contained value.
     const Node_NUD_UnaryOperator = struct {
         operator: *const Operator,
         inner: INode,
@@ -91,6 +110,9 @@ pub const SyntaxTree = struct {
         }
     };
 
+    /// Literal Node (Null Denotation)
+    /// 
+    /// Represents a single static literal
     const Node_NUD_Literal = struct {
         value: objects.Object,
 
@@ -115,6 +137,9 @@ pub const SyntaxTree = struct {
         }
     };
 
+    /// Identifier Node (Null Denotation)
+    /// 
+    /// Represents an identifier.
     const Node_NUD_Identifier = struct {
         identifier: objects.IdentifierHash,
 
@@ -139,25 +164,39 @@ pub const SyntaxTree = struct {
         }
     };
 
+    /// Parser
+    /// 
+    /// Converts a token stream into an AST. This implementation 
+    /// uses the classing Pratt Parsing algoritm. 
     const Parser = struct {
+        /// The token stream being parsed
         token_stream: TokenStream,
+        /// The current index within the token stream
         idx: usize = 0,
+        // General purpose allocator
         gpa: std.mem.Allocator,
 
+        /// Possible parsing errors
         const ParseError = error {
+            /// Couldnt generate a null denotation from a token
             NoNUDForToken,
+            /// Couldnt generate a left denotation from a token
             NoLEDForToken,
+            /// Expected a right prenthetical
             ExpectedRightParenthetical,
         } || anyerror;
 
+        /// peeks the current token being parsed
         fn peek(self: *const Parser) *const Token {
             return &self.token_stream.tokens[self.idx];
         }
 
+        /// precedes to the next token in the stream
         fn next(self: *Parser) void {
             self.*.idx += 1;
         }
 
+        /// Generates a null denotation
         fn nud(self: *Parser, token: *const Token) ParseError!INode {
             switch (token.*) {
                 .Identifier => |id| {
@@ -205,6 +244,7 @@ pub const SyntaxTree = struct {
             }
         }
 
+        /// Generates a left denotation
         fn led(self: *Parser, token: *const Token, left: INode) ParseError!INode {
             switch (token.*) {
                 .Operator => |op| {
@@ -228,6 +268,7 @@ pub const SyntaxTree = struct {
             }
         }
 
+        /// Parses an expression
         fn expr(self: *Parser, current_binding_power: i32) ParseError!INode {
             var left = try self.nud(self.peek());
             self.next();
@@ -281,7 +322,7 @@ pub export fn test_ast() void {
         }
     };
 
-    const stream = TokenStream.init(
+    var stream = TokenStream.init(
         gpa, 
         .{
             .operators = &operators,
@@ -289,10 +330,12 @@ pub export fn test_ast() void {
         }, 
         "5 * (1 + 1)"
     ) catch @panic("Failed to tokenize string");
+    defer stream.deinit(gpa);
 
     std.debug.print("{f}\n", .{stream});
 
-    const ast = SyntaxTree.init(gpa, stream) catch @panic("Failed to create AST");
+    var ast = SyntaxTree.init(gpa, stream) catch @panic("Failed to create AST");
+    defer ast.deinit(gpa);
 
     std.debug.print("{f}\n", .{ast});
 }
