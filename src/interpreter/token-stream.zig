@@ -58,9 +58,21 @@ pub const TokenStream = struct {
         /// Operators use their set binding power. EOF is always -1, any others are 0.
         pub fn left_binding_power(self: *const Token) i32 {
             switch (self.*) {
-                .Operator => |op| return op.infix_binding_power,
+                .Operator => |op| return op.infix_binding_power orelse 0,
                 .EOF => return -1,
                 else => return 0,
+            }
+        }
+
+
+        pub fn format(self: *const Token, writer: *std.io.Writer) std.Io.Writer.Error!void {
+            switch (self.*) {
+                .Identifier => try writer.print("IDENT", .{}),
+                .Literal => |lit| try lit.format(writer),
+                .Operator => |op| try writer.print("{s}", .{op.symbol}),
+                .LeftParen => try writer.print("(", .{}),
+                .RightParen => try writer.print(")", .{}),
+                .EOF => try writer.print("EOF!", .{}),
             }
         }
     };
@@ -124,7 +136,7 @@ pub const TokenStream = struct {
         /// 
         /// Stores the specific keyword tokens that are matched and the operators that
         /// are matched.
-        const TokenizerConfig = struct {
+        pub const TokenizerConfig = struct {
             operators: []*const Operator,
             keywords: []*const Keyword,
 
@@ -454,5 +466,11 @@ pub const TokenStream = struct {
 
     pub fn deinit(self: *TokenStream, gpa: std.mem.Allocator) void {
         gpa.free(self.tokens);
+    }
+
+    pub fn format(self: *const TokenStream, writer: *std.io.Writer) std.Io.Writer.Error!void {
+        for (self.tokens) |token| {
+            try writer.print("{f} ", .{token});
+        }
     }
 };

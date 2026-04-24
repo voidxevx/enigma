@@ -17,6 +17,7 @@ const heap = @import("heap-sparse-set.zig");
 // MODULES ----
 pub const objects = @import("objects.zig");
 pub const lexics = @import("token-stream.zig");
+pub const parser = @import("parser.zig");
 // ----- MODULES
 
 /// Runtime Interpreter Memory handler

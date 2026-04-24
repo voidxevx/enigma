@@ -35,19 +35,21 @@ pub const Object = extern union {
 
 
     pub fn format(self: *const Object, writer: *std.io.Writer) std.Io.Writer.Error!void {
-        switch (self.*) {
-            .byte => |i| try writer.print("{d}", .{i}),
-            .ubyte => |i| try writer.print("{d}", .{i}),
-            .short => |i| try writer.print("{d}", .{i}),
-            .ushort => |i| try writer.print("{d}", .{i}),
-            .int => |i| try writer.print("{d}", .{i}),
-            .uint => |i| try writer.print("{d}", .{i}),
-            .long => |i| try writer.print("{d}", .{i}),
-            .ulong => |i| try writer.print("{d}", .{i}),
-            .float => |i| try writer.print("{d}", .{i}),
-            .double => |i| try writer.print("{d}", .{i}),
-            .identifier => |i| try writer.print("{d}", .{i}),
-        }
+        _ = self;
+        try writer.print("LIT", .{});
+        // switch (self.*) {
+        //     .byte => |i| try writer.print("{d}", .{i}),
+        //     .ubyte => |i| try writer.print("{d}", .{i}),
+        //     .short => |i| try writer.print("{d}", .{i}),
+        //     .ushort => |i| try writer.print("{d}", .{i}),
+        //     .int => |i| try writer.print("{d}", .{i}),
+        //     .uint => |i| try writer.print("{d}", .{i}),
+        //     .long => |i| try writer.print("{d}", .{i}),
+        //     .ulong => |i| try writer.print("{d}", .{i}),
+        //     .float => |i| try writer.print("{d}", .{i}),
+        //     .double => |i| try writer.print("{d}", .{i}),
+        //     .identifier => |i| try writer.print("{d}", .{i}),
+        // }
     }
 };
 

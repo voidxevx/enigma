@@ -6,7 +6,16 @@ use enigma::{
     }
 };
 
+unsafe extern "C" {
+    unsafe fn test_ast();
+}
+
 fn main() {
+    unsafe {
+        test_ast();
+    }
+
+
     let mut interpreter = Interpreter::new();
 
     #[allow(unused)]
