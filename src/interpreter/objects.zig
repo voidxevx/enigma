@@ -3,6 +3,9 @@
 //! 
 //! An identical Rust implementation can be found at: ./objects.rs
 
+// INCLUDES -----
+const std = @import("std");
+
 /// Hashed Identifier
 /// 
 /// An identifier that was hashed into a smaller sequence to allow for more efficient memory management.
@@ -29,5 +32,22 @@ pub const Object = extern union {
     /// 
     /// Works as either a variable name or a pointer
     identifier: IdentifierHash,
+
+
+    pub fn format(self: *const Object, writer: *std.io.Writer) std.Io.Writer.Error!void {
+        switch (self.*) {
+            .byte => |i| try writer.print("{d}", .{i}),
+            .ubyte => |i| try writer.print("{d}", .{i}),
+            .short => |i| try writer.print("{d}", .{i}),
+            .ushort => |i| try writer.print("{d}", .{i}),
+            .int => |i| try writer.print("{d}", .{i}),
+            .uint => |i| try writer.print("{d}", .{i}),
+            .long => |i| try writer.print("{d}", .{i}),
+            .ulong => |i| try writer.print("{d}", .{i}),
+            .float => |i| try writer.print("{d}", .{i}),
+            .double => |i| try writer.print("{d}", .{i}),
+            .identifier => |i| try writer.print("{d}", .{i}),
+        }
+    }
 };
 
