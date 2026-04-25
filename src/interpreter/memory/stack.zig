@@ -6,6 +6,7 @@ const std = @import("std");
 const register = @import("register.zig");
 const Register = register.Register;
 const IRegister = register.IRegister;
+const HeapMemory = @import("heap.zig").HeapMemory;
 // ----- INCLUDES
 
 /// Interpreter Stack
@@ -17,7 +18,7 @@ pub const Stack = struct {
 
     memory: []u8,
     /// The current top position of the stack
-    stack_ptr: usize = 0,
+    stack_ptr: register.PrimaryRegister = .{ .raw = .{ .usize = 0 } },
 
     pub const Error = error{
         StackOverflow,
@@ -35,16 +36,16 @@ pub const Stack = struct {
 
     /// Pushes memory onto the stack
     pub fn push(self: *Stack, mem: []const u8) Error!void {
-        if (self.stack_ptr + mem.len > STACK_SIZE)
+        if (self.stack_ptr.raw.usize + mem.len > STACK_SIZE)
             return Error.StackOverflow;
-        @memmove(self.*.memory[self.stack_ptr..self.stack_ptr+mem.len], mem);
-        self.*.stack_ptr += mem.len;
+        @memmove(self.*.memory[self.stack_ptr.raw.usize..self.stack_ptr.raw.usize+mem.len], mem);
+        self.*.stack_ptr.raw.usize += mem.len;
     }
 
     /// Pops bytes from the stack into a register.
     pub fn pop(self: *Stack, bytes: usize, reg: IRegister) !void {
-        try reg.mov(self.memory[self.stack_ptr-bytes..self.stack_ptr]);
-        self.*.stack_ptr -= bytes;
+        try reg.mov(self.memory[self.stack_ptr.raw.usize-bytes..self.stack_ptr.raw.usize]);
+        self.*.stack_ptr.raw.usize -= bytes;
     }
 
     /// Reads a slice of the stack
@@ -77,4 +78,14 @@ pub export fn test_stack() void {
     r3.copy(r4.interface()) catch @panic("can't copy register");
 
     std.debug.assert(r3.raw.u8 == 75);
+
+
+    var heap = HeapMemory.init(std.heap.page_allocator) catch @panic("failed to create heap");
+    const ptr = heap.allocate(4) catch @panic("failed to allocate");
+
+    var r5: Register(4) = .{ .raw = .{ .u32 = 0 } };
+    r5.mov_unsized(heap.get(ptr)) catch unreachable;
+    std.debug.print("allocated memory: {d}\n", .{ r5.raw.u32 });
+
+    heap.free(ptr) catch unreachable;
 }
