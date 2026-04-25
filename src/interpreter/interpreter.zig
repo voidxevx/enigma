@@ -181,27 +181,22 @@ pub const Interpreter = struct {
         try self.heap.free(id);
     }
 
-    /// Gets an immutable pointer to a heap allocated piece of memory.
-    pub fn get(self: *const Interpreter, id: objects.IdentifierHash) *const objects.Object {
+    /// Gets a pointer to a heap allocated piece of memory.
+    pub fn get(self: *const Interpreter, id: objects.IdentifierHash) objects.Object.ObjectRef {
         return self.heap.get(id);
     }
 
-    /// Gets a mutable pointer to a heap allocated piece of memory.
-    pub fn get_mut(self: *Interpreter, id: objects.IdentifierHash) *objects.Object {
-        return self.heap.get_mut(id);
-    }
 };
 
 
 // FFI BINDINGS -----
 pub export fn new_interpreter() *Interpreter { return Interpreter.init() catch @panic("Failed to create interpreter context"); }
 pub export fn destroy_interpreter(interpreter: *Interpreter) void { interpreter.deinit(); }
-pub export fn push_to_interpreter(interpreter: *Interpreter, data: objects.Object) void { interpreter.push(data) catch @panic("failed to push to interpreter stack"); }
-pub export fn pop_from_interpreter(interpreter: *Interpreter) objects.Object { return interpreter.raw_pop(); }
+pub export fn push_to_interpreter(interpreter: *Interpreter, data: objects.Object.RawObject) void { interpreter.push(data.pack()) catch @panic("failed to push to interpreter stack"); }
+pub export fn pop_from_interpreter(interpreter: *Interpreter) objects.Object.RawObject { return interpreter.raw_pop().raw(); }
 pub export fn is_interpreter_stack_empty(interpreter: *Interpreter) bool { return interpreter.is_stack_empty(); }
 pub export fn flush_interpreter(interpreter: *Interpreter) void { interpreter.flush() catch @panic("failed to flush stack"); }
-pub export fn interpreter_allocate(interpreter: *Interpreter, data: objects.Object) objects.IdentifierHash { return interpreter.allocate(data) catch @panic("failed to allocate interpreter memory"); }
+pub export fn interpreter_allocate(interpreter: *Interpreter, data: objects.Object.RawObject) objects.IdentifierHash { return interpreter.allocate(data.pack()) catch @panic("failed to allocate interpreter memory"); }
 pub export fn interpreter_free(interpreter: *Interpreter, id: objects.IdentifierHash) void { interpreter.free(id) catch @panic("failed to free interpreter heap memory"); }
-pub export fn interpreter_get(interpreter: *const Interpreter, id: objects.IdentifierHash) *const objects.Object { return interpreter.get(id); }
-pub export fn interpreter_get_mut(interpreter: *Interpreter, id: objects.IdentifierHash) *objects.Object { return interpreter.get_mut(id); }
+pub export fn interpreter_get(interpreter: *const Interpreter, id: objects.IdentifierHash) objects.Object.ObjectRef.RawObjectRef { return interpreter.get(id).raw(); }
 // ----- FFI BINDINGS

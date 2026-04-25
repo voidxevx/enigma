@@ -18,7 +18,6 @@ comptime {
     _ = interpreter.interpreter_allocate;
     _ = interpreter.interpreter_free;
     _ = interpreter.interpreter_get;
-    _ = interpreter.interpreter_get_mut;
     // ----- Interpreter ffi bindings
 
     _ = interpreter.parser.test_ast;

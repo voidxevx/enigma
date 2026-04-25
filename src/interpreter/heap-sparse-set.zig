@@ -175,10 +175,11 @@ pub const HeapSparseSet = struct {
         try self.push_unused(id);
     }
 
-    /// Gets an immutable pointer to a piece of data from its id.
+    /// Gets a pointer to a piece of data from its id.
     /// 
     /// # Example
     /// 
+    /// Out Of Date!
     /// ```zig
     /// const std = @import("std");
     /// const HeapSparseSet = @include("heap-sparse-set.zig");
@@ -190,26 +191,8 @@ pub const HeapSparseSet = struct {
     /// 
     /// const val: *const objects.Object = set.get(id);
     /// ```
-    pub fn get(self: *const HeapSparseSet, id: objects.IdentifierHash) *const objects.Object {
-        return &self.dense.set[self.sparse.set[id]];
+    pub fn get(self: *const HeapSparseSet, id: objects.IdentifierHash) objects.Object.ObjectRef {
+        return self.dense.set[self.sparse.set[id]].ref();
     }
 
-    /// Gets a mutable pointer to a piece of data from its id.
-    /// 
-    /// # Example
-    /// 
-    /// ```zig
-    /// const std = @import("std");
-    /// const HeapSparseSet = @include("heap-sparse-set.zig");
-    /// const objects = @include("objects.zig");
-    /// 
-    /// var set: HeapSparseSet = try .init(std.heap.page_allocator);
-    /// const id = try set.emplace(.{ .int = 60 });
-    /// defer try set.free(id);
-    /// 
-    /// const val: *objects.Object = set.get(id);
-    /// ```
-    pub fn get_mut(self: *HeapSparseSet, id: objects.IdentifierHash) *objects.Object {
-        return &self.dense.set[self.sparse.set[id]];
-    }
 };

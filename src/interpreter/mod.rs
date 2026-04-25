@@ -10,8 +10,7 @@
 
 // INCLUDES -----
 use crate::interpreter::objects::{
-    IdentifierHash, 
-    Object
+    IdentifierHash, Object, ObjectRef, RawObject, RawObjectRef
 };
 // ----- INCLUDES
 
@@ -32,14 +31,13 @@ struct RawInterpreter {
 unsafe extern "C" {
     unsafe fn new_interpreter() -> *mut RawInterpreter;
     unsafe fn destroy_interpreter(interpreter: *mut RawInterpreter);
-    unsafe fn push_to_interpreter(interpreter: *mut RawInterpreter, data: Object);
-    unsafe fn pop_from_interpreter(interpreter: *mut RawInterpreter) -> Object;
+    unsafe fn push_to_interpreter(interpreter: *mut RawInterpreter, data: RawObject);
+    unsafe fn pop_from_interpreter(interpreter: *mut RawInterpreter) -> RawObject;
     unsafe fn is_interpreter_stack_empty(interpreter: *const RawInterpreter) -> bool;
     unsafe fn flush_interpreter(interpreter: *mut RawInterpreter);
-    unsafe fn interpreter_allocate(interpreter: *mut RawInterpreter, data: Object) -> IdentifierHash;
+    unsafe fn interpreter_allocate(interpreter: *mut RawInterpreter, data: RawObject) -> IdentifierHash;
     unsafe fn interpreter_free(interpreter: *mut RawInterpreter, id: IdentifierHash);
-    unsafe fn interpreter_get(interpreter: *const RawInterpreter, id: IdentifierHash) -> *const Object;
-    unsafe fn interpreter_get_mut(interpreter: *mut RawInterpreter, id: IdentifierHash) -> *mut Object;
+    unsafe fn interpreter_get(interpreter: *const RawInterpreter, id: IdentifierHash) -> RawObjectRef;
 }
 // ----- FFI BINDINGS
 
@@ -108,7 +106,7 @@ impl Interpreter {
     /// interpreter.push(Object { int: 50 });
     /// ```
     pub fn push(&mut self, data: Object) {
-        unsafe {push_to_interpreter(self.raw, data); }
+        unsafe {push_to_interpreter(self.raw, data.raw()); }
     }
 
     #[inline(always)]
@@ -130,7 +128,7 @@ impl Interpreter {
                 return None;
             }
 
-            Some(pop_from_interpreter(self.raw))
+            Some(pop_from_interpreter(self.raw).pack())
         }
     }
 
@@ -143,7 +141,7 @@ impl Interpreter {
     #[inline(always)]
     /// Frees a piece of allocated heap memory by its identifier pointer.
     pub fn allocate(&mut self, data: Object) -> IdentifierHash {
-        unsafe {interpreter_allocate(self.raw, data)}
+        unsafe {interpreter_allocate(self.raw, data.raw())}
     }
 
     #[inline(always)]
@@ -154,21 +152,12 @@ impl Interpreter {
 
     #[inline(always)]
     /// Gets an immutable pointer to a heap allocated piece of memory.
-    pub fn get(&self, id: IdentifierHash) -> &Object {
+    pub fn get(&self, id: IdentifierHash) -> ObjectRef {
         unsafe { 
-            let data = interpreter_get(self.raw, id);
-            return data.as_ref().unwrap();
+            return interpreter_get(self.raw, id).pack();
         }
     }
 
-    #[inline(always)]
-    /// Gets a mutable pointer to a heap allocated piece of memory.
-    pub fn get_mut(&mut self, id: IdentifierHash) -> &mut Object {
-        unsafe {
-            let data = interpreter_get_mut(self.raw, id);
-            return data.as_mut().unwrap();
-        }
-    }
 }
 
 impl Drop for Interpreter {

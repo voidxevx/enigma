@@ -22,22 +22,21 @@ fn main() {
     let app = Application::new("Enigma");
     // app.main_loop();
 
-    interpreter.push(Object { int: 70 });
+    interpreter.push(Object::Int(32));
     let popped_val = interpreter.pop().unwrap();
-    unsafe {
-        println!("Popped int: {}", popped_val.int);
-    }
+    println!("Popped int: {}", popped_val);
 
-    let id = interpreter.allocate(Object { int: 45 });
-    assert_eq!(id, 0);
-    let data = interpreter.get_mut(id);
-    unsafe {
-        assert_eq!(data.int, 45);
-        data.int = 90;
-    }
+    let id = interpreter.allocate(Object::Float(34.0));
+    let val = interpreter.get(id);
 
-    let data_ch = interpreter.get(id);
-    unsafe {
-        assert_eq!(data_ch.int, 90);
-    }
+    let v: &mut f32 = {
+        let v: Option<&mut f32> = val.into();
+        v.unwrap()
+    };
+
+    *v = 50.8;
+
+    let val_2 = interpreter.get(id);
+    let v_2: Option<f32> = val_2.into();
+    assert_eq!(v_2, Some(50.8));
 }
