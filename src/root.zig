@@ -5,9 +5,12 @@
 const std = @import("std");
 // ----- INCLUDES
 
+// MODULES -----
+const interpreter = @import("interpreter/mod.zig");
+// ----- MODULES
+
 // COMPTIME BINDINGS
 comptime {
-    // Interpreter ffi bindings -----
-    // ----- Interpreter ffi bindings
+    _ = interpreter.mem.stack.test_stack;
 
 }
