@@ -25,7 +25,7 @@ pub const SyntaxTree = struct {
     /// Node Interface
     /// 
     /// Interface class for AST Nodes. Since Zig has no form of polymorphism built in 
-    /// I must implement it manually via vtables. The Interface Node class wrappes an opaque
+    /// I must implement it manually via vtables. The Interface Node class wraps an opaque
     /// pointer to the object as well as a vtable containing all of its methods. This is identical
     /// to how polymorphism and virtual functions work in every other language.
     const INode = struct {
@@ -167,7 +167,7 @@ pub const SyntaxTree = struct {
     /// Parser
     /// 
     /// Converts a token stream into an AST. This implementation 
-    /// uses the classing Pratt Parsing algoritm. 
+    /// uses the classing Pratt Parsing algorithm. 
     const Parser = struct {
         /// The token stream being parsed
         token_stream: TokenStream,
@@ -178,11 +178,11 @@ pub const SyntaxTree = struct {
 
         /// Possible parsing errors
         const ParseError = error {
-            /// Couldnt generate a null denotation from a token
+            /// Couldn't generate a null denotation from a token
             NoNUDForToken,
-            /// Couldnt generate a left denotation from a token
+            /// Couldn't generate a left denotation from a token
             NoLEDForToken,
-            /// Expected a right prenthetical
+            /// Expected a right parenthetical
             ExpectedRightParenthetical,
         } || anyerror;
 
