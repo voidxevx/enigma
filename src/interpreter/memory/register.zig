@@ -1,6 +1,8 @@
 //! Interpreter Register
 //! 4/25/2026 - Nyx
 
+// INCLUDES -----
+const Ord = @import("../../core.zig").Ord;
 
 /// Interface Register
 /// 
@@ -32,6 +34,7 @@ pub const IRegister = struct {
     }
 };
 
+
 /// Register
 /// 
 /// Stores raw bytes in a way that can be quickly accessed.
@@ -51,6 +54,8 @@ pub fn Register(comptime size: usize) type {
 
             i8: i8,
             u8: u8,
+            bool: bool,
+            ord: Ord,
 
             i16: if (size >= 2) i16 else void,
             u16: if (size >= 2) u16 else void,
@@ -69,6 +74,12 @@ pub fn Register(comptime size: usize) type {
             u128: if (size >= 16) u128 else void,
             f128: if (size >= 16) f128 else void,
         };
+
+        pub inline fn empty() Register(size) {
+            return .{
+                .raw = .{ .bool = false },
+            };
+        }
 
         /// Packs the register into an interface
         pub fn interface(self: *Register(size)) IRegister {
@@ -122,7 +133,7 @@ pub fn Register(comptime size: usize) type {
 
         /// Clears the register filling it with 0s
         pub inline fn flush(self: *Register(size)) void {
-            self.*.raw.bytes = [_]u8{0} ** size;
+            self.*.raw.bool = false;
         }
     };
 }
@@ -133,4 +144,7 @@ pub fn Register(comptime size: usize) type {
 pub const PrimaryRegister = Register(@sizeOf(usize));
 
 /// Used for large registers like ymm or xmm.
-pub const LargeRegister = Register(32);
+pub const LargeRegister = Register(16);
+
+/// Used for small integers and chars
+pub const SmallRegister = Register(1);

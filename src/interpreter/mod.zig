@@ -3,4 +3,5 @@
 
 // MODULES -----
 pub const mem = @import("memory/mod.zig");
+pub const vm = @import("virtual-machine.zig");
 // ----- MODULES

@@ -1,10 +1,9 @@
-use enigma::test_stack;
+use enigma::test_vm;
 
 
 fn main() {
 
     unsafe {
-        test_stack();
+        test_vm();
     }
-
 }

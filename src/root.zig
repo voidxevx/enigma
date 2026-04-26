@@ -11,6 +11,6 @@ const interpreter = @import("interpreter/mod.zig");
 
 // COMPTIME BINDINGS
 comptime {
-    _ = interpreter.mem.stack.test_stack;
-
+    _ = interpreter.vm.test_vm;
+    
 }
