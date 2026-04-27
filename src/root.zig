@@ -19,7 +19,7 @@ comptime {
 const TokenStream = interpreter.oasm.tokenizer.TokenStream;
 
 export fn root_test() void {
-    const str = "push \"Hello, world\"";
+    const str = "mov r1 #0";
 
     var ts = TokenStream.init(core.allocator, str) catch @panic("Failed to tokenize");
     defer ts.deinit(core.allocator);

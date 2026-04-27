@@ -3,7 +3,9 @@
 
 // INCLUDES -----
 const std = @import("std");
-const Token = @import("tokens.zig").Token;
+const tokens = @import("tokens.zig");
+const Token = tokens.Token;
+const RegisterData = tokens.RegisterData;
 const proc = @import("procedure.zig");
 const Procedure = proc.Procedure;
 const Tag = proc.Tag;
@@ -28,7 +30,7 @@ pub const TokenStream = struct {
         buffer: []u8,
         buffer_size: usize = 0,
 
-        state: union(enum(u2)) {
+        state: union(enum(u3)) {
             /// needs to switch next
             bad,
 
@@ -36,6 +38,7 @@ pub const TokenStream = struct {
             none,
             numeric: NumericState,
             string,
+            register: RegisterData,
         } = .bad,
 
         const StateResult = enum {
@@ -196,6 +199,7 @@ pub const TokenStream = struct {
 
         const Error = error{
             InvalidDigit,
+            InvalidRegister,
         };
 
         fn init(gpa: std.mem.Allocator, string: []const u8) !Tokenizer {
@@ -232,13 +236,17 @@ pub const TokenStream = struct {
 
         fn switch_state(self: *Tokenizer) void {
             const current = self.peek();
-            if (std.ascii.isWhitespace(current))
+            if (std.ascii.isWhitespace(current)) {
+                self.*.state = .bad;
                 return;
+            }
 
             if (current == '"') {
                 self.*.state = .string;
             } else if (current == '#') {
                 self.*.state = .{ .numeric = .{} };
+            } else if (current == 'r') {
+                self.*.state = .{ .register = .{} };
             } else {
                 self.*.state = .none;
                 self.consume();
@@ -284,6 +292,12 @@ pub const TokenStream = struct {
             }
         }
 
+        fn push_register_token(self: *Tokenizer) !void {
+            if (!self.state.register.is_valid())
+                return Error.InvalidRegister;
+            try self.push_token(.{ .Register = self.state.register });
+        }
+
         fn push_string_token(self: *Tokenizer, buffer: []const u8) !void {
             const buf = try self.gpa.alloc(u8, buffer.len);
             @memcpy(buf, buffer);
@@ -309,6 +323,7 @@ pub const TokenStream = struct {
                 .none => try self.push_standard_token(buf),
                 .numeric => try self.push_numeric_token(buf),
                 .string => try self.push_string_token(buf),
+                .register => try self.push_register_token(),
                 .bad => unreachable,
             }
 
@@ -326,9 +341,29 @@ pub const TokenStream = struct {
             }
         }
 
+        fn check_register_state(self: *Tokenizer) !StateResult {
+            const current = self.peek();
+            if (std.ascii.isDigit(current)) {
+                self.*.state.register.id = try std.fmt.charToDigit(current, 10);
+                try self.push_register_token();
+                self.next();
+                return .OutOfDate;
+            } else {
+                switch (current) {
+                    's' => self.*.state.register.size = .small,
+                    'l' => self.*.state.register.size = .large,
+                    else => {
+                        return Error.InvalidRegister;
+                    }
+                }
+            return .Ok;
+            }
+        }
+
         fn check_string_state(self: *Tokenizer) !StateResult {
             if (self.peek() == '"') {
                 try self.push_buffer();
+                self.next();
                 return .OutOfDate;
             } else {
                 self.consume();
@@ -346,7 +381,7 @@ pub const TokenStream = struct {
                         'h' => num_state.*.format = .Hex,
                         'b' => num_state.*.format = .Binary,
                         else => {
-                            if (std.ascii.isDigit(current)) {
+                            if (std.ascii.isDigit(current) or current == '-') {
                                 self.consume();
                             } else return Error.InvalidDigit;
                         },
@@ -356,7 +391,7 @@ pub const TokenStream = struct {
                 .values => {
                     switch (num_state.format) {
                         .Decimal => {
-                            if (std.ascii.isDigit(current)) {
+                            if (std.ascii.isDigit(current) or current == '-') {
                                 self.consume();
                             } else if (current == '.' and !num_state.floating_point) {
                                 num_state.*.floating_point = true;
@@ -367,7 +402,7 @@ pub const TokenStream = struct {
                             }
                         },
                         .Hex => {
-                            if (std.ascii.isHex(current)) {
+                            if (std.ascii.isHex(current) or current == '-') {
                                 self.consume();
                             } else {
                                 num_state.*.expecting = .size;
@@ -407,11 +442,19 @@ pub const TokenStream = struct {
                 .none => return try self.check_standard_state(),
                 .numeric => return try self.check_numeric_state(),
                 .string => return try self.check_string_state(),
+                .register => return try self.check_register_state(),
             }
         }
 
         fn tokenize(self: *Tokenizer) !void {
-            while (self.idx < self.string.len) {
+            loop: while (self.idx < self.string.len) {
+                if (self.peek() == ';')
+                    while(self.peek() != '\n') {
+                        self.next();
+                        if (self.idx >= self.string.len)
+                            break :loop;
+                    };
+
                 switch (try self.check_state()) {
                     .OutOfDate => self.switch_state(),
                     else => {},
