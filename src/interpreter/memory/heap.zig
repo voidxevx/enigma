@@ -79,4 +79,10 @@ pub const HeapMemory = struct {
     pub fn get(self: *HeapMemory, ptr: usize) []u8 {
         return self.allocations[ptr];
     }
+
+
+
+    pub fn format(self: *const HeapMemory, writer: *std.io.Writer) std.Io.Writer.Error!void {
+        try writer.print("[HEAP]\n\tAllocations: {d}\n", .{self.allocation_count - self.freed_count});
+    }
 };

@@ -3,4 +3,5 @@
 
 unsafe extern "C" {
     pub unsafe fn test_vm();
+    pub unsafe fn root_test();
 }

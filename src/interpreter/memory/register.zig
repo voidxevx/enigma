@@ -77,7 +77,7 @@ pub fn Register(comptime size: usize) type {
 
         pub inline fn empty() Register(size) {
             return .{
-                .raw = .{ .bool = false },
+                .raw = .{ .bytes = [_]u8{0} ** size },
             };
         }
 
@@ -133,7 +133,7 @@ pub fn Register(comptime size: usize) type {
 
         /// Clears the register filling it with 0s
         pub inline fn flush(self: *Register(size)) void {
-            self.*.raw.bool = false;
+            self.*.raw.bytes = [_]u8{0} ** size;
         }
     };
 }

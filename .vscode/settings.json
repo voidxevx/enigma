@@ -3,6 +3,7 @@
         "LEXICS",
         "memcpy",
         "memmove",
+        "oasm",
         "rentinterpreted",
         "RUSTFLAGS",
         "ubyte",

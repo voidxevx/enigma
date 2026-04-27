@@ -7,10 +7,21 @@ const std = @import("std");
 
 // MODULES -----
 const interpreter = @import("interpreter/mod.zig");
+const core = @import("core.zig");
 // ----- MODULES
 
 // COMPTIME BINDINGS
 comptime {
     _ = interpreter.vm.test_vm;
-    
+    _ = root_test;
+}
+
+const TokenStream = interpreter.oasm.tokenizer.TokenStream;
+
+export fn root_test() void {
+    const str = "push \"Hello, world\"";
+
+    var ts = TokenStream.init(core.allocator, str) catch @panic("Failed to tokenize");
+    defer ts.deinit(core.allocator);
+    std.debug.print("{f}\n", .{ts});
 }

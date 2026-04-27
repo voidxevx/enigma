@@ -1,0 +1,4 @@
+prog root
+
+proc main
+    mov #45 r1

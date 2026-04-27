@@ -4,9 +4,7 @@
 // INCLUDES -----
 const std = @import("std");
 const register = @import("register.zig");
-const Register = register.Register;
 const IRegister = register.IRegister;
-const HeapMemory = @import("heap.zig").HeapMemory;
 // ----- INCLUDES
 
 /// Interpreter Stack
@@ -56,5 +54,15 @@ pub const Stack = struct {
     /// Writes a slice of memory to the stack
     pub fn write(self: *Stack, ptr: usize, mem: []const u8) void {
         @memmove(self.memory[ptr..ptr+mem.len], mem);
+    }
+
+
+
+    pub fn format(self: *const Stack, writer: *std.io.Writer) std.Io.Writer.Error!void {
+        try writer.print("[STACK]\n\tptr: {d}\n", .{self.stack_ptr.raw.usize});
+        for (1..self.stack_ptr.raw.usize + 1) |i| {
+            const idx = self.stack_ptr.raw.usize - i;
+            try writer.print("\t{d}-{d}\n", .{idx, self.memory[idx]});
+        }
     }
 };

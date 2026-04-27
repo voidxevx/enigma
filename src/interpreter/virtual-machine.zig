@@ -28,8 +28,8 @@ pub const VirtualMachine = struct {
         // Small Registers
         sr1: mem.register.SmallRegister = .empty(),    
         sr2: mem.register.SmallRegister = .empty(),    
-        sr3: mem.register.SmallRegister = .empty(),    
-        sr4: mem.register.SmallRegister = .empty(),    
+        sr3: mem.register.SmallRegister = .empty(),
+        sr4: mem.register.SmallRegister = .empty(),
     } = .{},
 
     pub fn init(gpa: std.mem.Allocator) !VirtualMachine {
@@ -37,6 +37,20 @@ pub const VirtualMachine = struct {
             .stack = try .init(gpa),
             .heap = try .init(gpa),
         };
+    }
+
+    pub fn format(self: *const VirtualMachine, writer: *std.io.Writer) std.Io.Writer.Error!void {
+        try writer.print("[VM]\n{f}{f}", .{self.stack, self.heap});
+        try writer.print("[PRIMARY-REGISTERS]\n\tr1: {d}\n\tr2: {d}\n\tr3: {d}\n\tr4: {d}\n\tr5: {d}\n\tr6: {d}\n\tr7: {d}\n\tr8: {d}\n", .{
+            self.registers.r1.raw.usize, self.registers.r2.raw.usize, self.registers.r3.raw.usize, self.registers.r4.raw.usize,
+            self.registers.r5.raw.usize, self.registers.r6.raw.usize, self.registers.r7.raw.usize, self.registers.r5.raw.usize,
+        });
+        try writer.print("[SMALL-REGISTERS]\n\tsr1: {d}\n\tsr2: {d}\n\tsr3: {d}\n\tsr4: {d}\n", .{
+            self.registers.sr1.raw.u8, self.registers.sr2.raw.u8, self.registers.sr3.raw.u8, self.registers.sr4.raw.u8,
+        });
+        try writer.print("[LARGE-REGISTERS]\n\tlr1: {d}\n\tlr2: {d}\n", .{
+            self.registers.lr1.raw.u128, self.registers.lr2.raw.u128,
+        });
     }
 };
 
@@ -57,10 +71,14 @@ pub export fn test_vm() void {
 
     var vm = VirtualMachine.init(gpa) catch unreachable;
 
+    vm.stack.push(&[_]u8{'h', 'e', 'l', 'l', 'o'}) catch unreachable;
+
     const t: i32 = 45;
     vm.registers.r1.mov_unsized(std.mem.asBytes(&t)) catch unreachable;
     std.debug.assert(vm.registers.r1.raw.i32 == 45);
 
+    std.debug.print("{f}", .{vm});
+    
     const a = 56;
     const b = 23;
     const o = core.cmp(i32, a, b);
