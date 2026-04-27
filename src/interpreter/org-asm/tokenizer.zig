@@ -245,7 +245,7 @@ pub const TokenStream = struct {
                 self.*.state = .string;
             } else if (current == '#') {
                 self.*.state = .{ .numeric = .{} };
-            } else if (current == 'r') {
+            } else if (current == '%') {
                 self.*.state = .{ .register = .{} };
             } else {
                 self.*.state = .none;

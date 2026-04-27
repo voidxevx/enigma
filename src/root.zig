@@ -19,7 +19,11 @@ comptime {
 const TokenStream = interpreter.oasm.tokenizer.TokenStream;
 
 export fn root_test() void {
-    const str = "mov r1 #0";
+    const file = std.fs.cwd().openFile("content/tests/asm/test.oasm", .{}) catch @panic("failed to open file");
+    defer file.close();
+
+    const str = file.readToEndAlloc(core.allocator, std.math.maxInt(usize)) catch @panic("failed to read file");
+    defer core.allocator.free(str);
 
     var ts = TokenStream.init(core.allocator, str) catch @panic("Failed to tokenize");
     defer ts.deinit(core.allocator);
